@@ -1,0 +1,109 @@
+/**
+ * Error Codes Helper
+ * Standard error codes used throughout the application
+ * Maps to HTTP status codes and error messages
+ */
+
+const ERROR_CODES = {
+  // Validation Errors (400)
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  INVALID_INPUT: 'INVALID_INPUT',
+  MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD',
+
+  // Authentication Errors (401)
+  AUTH_MISSING_TOKEN: 'AUTH_MISSING_TOKEN',
+  AUTH_INVALID_TOKEN: 'AUTH_INVALID_TOKEN',
+  AUTH_TOKEN_EXPIRED: 'AUTH_TOKEN_EXPIRED',
+  AUTH_INVALID_AUDIENCE: 'AUTH_INVALID_AUDIENCE',
+  AUTH_INVALID_ISSUER: 'AUTH_INVALID_ISSUER',
+  AUTH_INVALID_TENANT: 'AUTH_INVALID_TENANT',
+  AUTH_INSUFFICIENT_SCOPE: 'AUTH_INSUFFICIENT_SCOPE',
+
+  // Authorization Errors (403)
+  FORBIDDEN: 'FORBIDDEN',
+  INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS',
+  ROLE_REQUIRED: 'ROLE_REQUIRED',
+
+  // Resource Errors (404)
+  NOT_FOUND: 'NOT_FOUND',
+  RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND',
+
+  // Conflict Errors (409)
+  CONFLICT: 'CONFLICT',
+  RESOURCE_ALREADY_EXISTS: 'RESOURCE_ALREADY_EXISTS',
+
+  // Unprocessable Entity Errors (422)
+  SEMANTIC_ERROR: 'SEMANTIC_ERROR',
+  BUSINESS_RULE_VIOLATION: 'BUSINESS_RULE_VIOLATION',
+
+  // Rate Limit Errors (429)
+  RATE_LIMITED: 'RATE_LIMITED',
+  TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
+
+  // Server Errors (500)
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  DATABASE_ERROR: 'DATABASE_ERROR',
+  EXTERNAL_SERVICE_ERROR: 'EXTERNAL_SERVICE_ERROR',
+
+  // Service Unavailable (503)
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+  DATABASE_UNAVAILABLE: 'DATABASE_UNAVAILABLE',
+};
+
+/**
+ * Map error code to HTTP status code
+ * @param {string} errorCode - Error code from ERROR_CODES
+ * @returns {number} HTTP status code
+ */
+function getHttpStatus(errorCode) {
+  const statusMap = {
+    // 400 Bad Request
+    VALIDATION_ERROR: 400,
+    INVALID_INPUT: 400,
+    MISSING_REQUIRED_FIELD: 400,
+
+    // 401 Unauthorized
+    AUTH_MISSING_TOKEN: 401,
+    AUTH_INVALID_TOKEN: 401,
+    AUTH_TOKEN_EXPIRED: 401,
+    AUTH_INVALID_AUDIENCE: 401,
+    AUTH_INVALID_ISSUER: 401,
+    AUTH_INVALID_TENANT: 401,
+    AUTH_INSUFFICIENT_SCOPE: 401,
+
+    // 403 Forbidden
+    FORBIDDEN: 403,
+    INSUFFICIENT_PERMISSIONS: 403,
+    ROLE_REQUIRED: 403,
+
+    // 404 Not Found
+    NOT_FOUND: 404,
+    RESOURCE_NOT_FOUND: 404,
+
+    // 409 Conflict
+    CONFLICT: 409,
+    RESOURCE_ALREADY_EXISTS: 409,
+
+    // 422 Unprocessable Entity
+    SEMANTIC_ERROR: 422,
+    BUSINESS_RULE_VIOLATION: 422,
+
+    // 429 Too Many Requests
+    RATE_LIMITED: 429,
+    TOO_MANY_REQUESTS: 429,
+
+    // 500 Internal Server Error
+    INTERNAL_ERROR: 500,
+    DATABASE_ERROR: 500,
+    EXTERNAL_SERVICE_ERROR: 500,
+
+    // 503 Service Unavailable
+    SERVICE_UNAVAILABLE: 503,
+    DATABASE_UNAVAILABLE: 503,
+  };
+
+  return statusMap[errorCode] || 500;
+}
+
+module.exports = ERROR_CODES;
+module.exports.getHttpStatus = getHttpStatus;

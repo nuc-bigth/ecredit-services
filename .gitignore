@@ -1,0 +1,50 @@
+# Environment files with real credentials
+.env
+.env.dev
+.env.qas
+.env.prd
+.env.local
+
+# HTTPS certificates and keys
+*.key
+*.crt
+*.pem
+*.cer
+*.pfx
+
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Application logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime directories
+dist/
+build/
+temp/
+tmp/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.vs/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# GitHub Actions
+.github/

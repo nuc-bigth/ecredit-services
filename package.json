@@ -1,0 +1,57 @@
+{
+  "name": "ecredit-services",
+  "version": "1.0.0",
+  "description": "e-Credit backend API with Microsoft Entra ID authentication, SQL Server, and multi-environment support",
+  "main": "app.js",
+  "type": "commonjs",
+  "engines": {
+    "node": "22.12.0"
+  },
+  "scripts": {
+    "start": "node app.js",
+    "start:dev": "cross-env NODE_ENV=dev node app.js",
+    "start:qas": "cross-env NODE_ENV=qas node app.js",
+    "start:prd": "cross-env NODE_ENV=prd node app.js",
+    "dev": "cross-env NODE_ENV=dev node app.js",
+    "main": "node app.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch"
+  },
+  "keywords": [
+    "express",
+    "node",
+    "api",
+    "msal",
+    "azure",
+    "entra",
+    "sql-server",
+    "sequelize"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "cross-env": "^10.1.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.22.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "joi": "^17.11.0",
+    "jsonwebtoken": "^9.0.2",
+    "sequelize": "^6.35.2",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0",
+    "tedious": "^16.7.1",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^4.7.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.54.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.1.0",
+    "supertest": "^6.3.3"
+  }
+}
