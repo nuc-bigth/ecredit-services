@@ -4,6 +4,7 @@ const authRoute = require('./authRoute');
 const sessionRoute = require('./sessionRoute');
 const healthRoute = require('./healthRoute');
 const docsRoute = require('./docsRoute');
+const requestRoute = require('./requestRoute');
 
 /**
  * QAS Environment Route Aggregator
@@ -20,6 +21,7 @@ const router = express.Router();
 router.use('/home', homeRoute);
 router.use('/auth', authRoute);
 router.use('/session', sessionRoute);
+router.use('/requests', requestRoute);
 router.use('/health', healthRoute);
 router.use('/docs', docsRoute);
 
