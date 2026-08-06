@@ -1,0 +1,76 @@
+const { getModels } = require('../models');
+
+/**
+ * Look up the full permission/profile record for a user by their M365 email.
+ * Mirrors the legacy raw SQL query (USERS + USER_ROLES/ROLES + S_EMPLOYEE1 + S_MAPPING_COST_CENTER).
+ *
+ * @param {string} email - Email returned from the Microsoft Entra ID (M365) login
+ * @returns {Promise<object|null>} Flat profile object, or null if the user has no access
+ */
+async function getUserProfileByEmail(email) {
+  const { User, Employee, UserRole, Role, CostCenterMapping } = getModels();
+
+  // TB1 + TB3 (+ TB5/TB6 managers) + TB4: required Employee join replicates the WHERE filter
+  const user = await User.findOne({
+    include: [
+      {
+        model: Employee,
+        as: 'employee',
+        required: true,
+        where: { CURRENT_EMAIL: email },
+        include: [
+          { model: Employee, as: 'manager1' },
+          { model: Employee, as: 'manager2' },
+        ],
+      },
+      {
+        model: CostCenterMapping,
+        as: 'costCenter',
+        required: false,
+      },
+    ],
+  });
+
+  if (!user) {
+    return null;
+  }
+
+  // TB2: correlated "TOP (1) ... ORDER BY LEVEL DESC" subquery for the highest-level enabled role
+  const topUserRole = await UserRole.findOne({
+    where: { USER_ID: user.ID, ENABLED: '1' },
+    include: [{ model: Role, as: 'role', where: { ENABLED: '1' } }],
+    order: [[{ model: Role, as: 'role' }, 'LEVEL', 'DESC']],
+  });
+
+  const employee = user.employee;
+  const manager1 = employee.manager1;
+  const manager2 = employee.manager2;
+  const costCenter = user.costCenter;
+  const role = topUserRole ? topUserRole.role : null;
+
+  return {
+    CODE: employee.EMP_CODE,
+    ROLE_ID: role ? role.ID : null,
+    ROLE: role ? role.NAME : null,
+    BU_ID: costCenter ? costCenter.BU_ID : null,
+    BU: costCenter ? costCenter.BU : null,
+    DEPARTMENT_ID: costCenter ? costCenter.DEPARTMENT_ID : null,
+    DEPARTMENT: costCenter ? costCenter.DEPARTMENT : null,
+    USERNAME: employee.USERNAME || '',
+    INITIALS: employee.INITIALS || '',
+      FULL_NAME: employee.NAME_ENG || '',
+    EMAIL: employee.CURRENT_EMAIL || '',
+    CODE_MANAGER_1: manager1 ? manager1.EMP_CODE : null,
+    USERNAME_MANAGER_1: manager1 ? manager1.USERNAME || '' : '',
+    INITIALS_MANAGER_1: manager1 ? manager1.INITIALS || '' : '',
+    EMAIL_MANAGER_1: manager1 ? manager1.CURRENT_EMAIL || '' : '',
+    CODE_MANAGER_2: manager2 ? manager2.EMP_CODE : null,
+    USERNAME_MANAGER_2: manager2 ? manager2.USERNAME || '' : '',
+    INITIALS_MANAGER_2: manager2 ? manager2.INITIALS || '' : '',
+    EMAIL_MANAGER_2: manager2 ? manager2.CURRENT_EMAIL || '' : '',
+  };
+}
+
+module.exports = {
+  getUserProfileByEmail,
+};

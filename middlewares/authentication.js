@@ -2,6 +2,7 @@ const logger = require('../config/logger');
 const config = require('../config/env');
 const tokenValidator = require('../helpers/tokenValidator');
 const errorCodes = require('../helpers/errorCodes');
+const userProfileService = require('../services/userProfileService');
 
 /**
  * Authentication Middleware
@@ -15,12 +16,12 @@ const errorCodes = require('../helpers/errorCodes');
 /**
  * Express middleware for JWT authentication
  * Validates authorization bearer token and extracts user context
- * 
+ *
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
-function authenticationMiddleware(req, res, next) {
+async function authenticationMiddleware(req, res, next) {
   const correlationId = res.locals.correlationId || 'N/A';
 
   try {
@@ -101,6 +102,46 @@ function authenticationMiddleware(req, res, next) {
       oid: req.user.oid,
       tid: req.user.tid,
     });
+
+    // Verify the M365 email is registered in eCredit and load the permission profile
+    let profile;
+    try {
+      profile = await userProfileService.getUserProfileByEmail(req.user.email);
+    } catch (dbError) {
+      logger.error(`Permission lookup failed: ${dbError.message}`, {
+        correlationId,
+        oid: req.user.oid,
+        stack: dbError.stack,
+      });
+
+      return res.status(503).json({
+        success: false,
+        error: {
+          code: errorCodes.DATABASE_UNAVAILABLE,
+          message: 'Unable to verify permissions at this time. Please try again later.',
+        },
+        correlationId,
+      });
+    }
+
+    if (!profile) {
+      logger.warn(`Authentication failed: No eCredit access for ${req.user.email}`, {
+        correlationId,
+        oid: req.user.oid,
+        email: req.user.email,
+      });
+
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: errorCodes.FORBIDDEN,
+          message: 'You do not have permission to access this system.',
+        },
+        correlationId,
+      });
+    }
+
+    req.user.profile = profile;
 
     next();
   } catch (error) {

@@ -22,6 +22,7 @@ async function getCurrentUser(req, res, next) {
       email: user.email,
       displayName: user.displayName,
       roles: user.roles,
+      profile: user.profile || null,
     };
 
     const response = {

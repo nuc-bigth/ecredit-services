@@ -4,7 +4,8 @@ const rateLimit = require('express-rate-limit');
 const https = require('https');
 const config = require('./config/env');
 const logger = require('./config/logger');
-const { initializeDatabase, closeDatabase } = require('./config/database');
+const { initializeDatabase, getDatabase, closeDatabase } = require('./config/database');
+const { initModels } = require('./models');
 const { createHttpsServer } = require('./config/https');
 const correlationIdMiddleware = require('./middlewares/correlationId');
 const corsMiddleware = require('./middlewares/cors');
@@ -149,6 +150,7 @@ async function startServer() {
     // Initialize database
     logger.info('Initializing database connection...');
     await initializeDatabase();
+    initModels(getDatabase());
     logger.info('Database initialized successfully');
 
     // Create HTTPS server

@@ -1,15 +1,15 @@
-const { listMockRequests, getMockRequestById, deleteMockRequest } = require('../../helpers/mockRequests');
 const logger = require('../../config/logger');
+const requestService = require('../../services/requestService');
 
 async function listRequests(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const data = listMockRequests(req.query);
+    const data = await requestService.listRequests(req.query);
 
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.status(200).json({ success: true, data, correlationId });
 
-    logger.debug('Mock requests returned', {
+    logger.debug('Requests returned', {
       correlationId,
       route: { method: req.method, path: req.path },
       payload: { page: data.pagination.page, pageSize: data.pagination.pageSize, totalItems: data.pagination.totalItems },
@@ -27,7 +27,7 @@ async function listRequests(req, res, next) {
 async function getRequest(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const request = getMockRequestById(req.params.id);
+    const request = await requestService.getRequestById(req.params.id);
 
     if (!request) {
       const error = new Error(`Request ${req.params.id} was not found.`);
@@ -39,7 +39,7 @@ async function getRequest(req, res, next) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.status(200).json({ success: true, data: request, correlationId });
 
-    logger.debug('Mock request returned', {
+    logger.debug('Request returned', {
       correlationId,
       route: { method: req.method, path: req.path },
       payload: { id: request.id },
@@ -57,7 +57,15 @@ async function getRequest(req, res, next) {
 async function deleteRequest(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const deleted = deleteMockRequest(req.params.id);
+    const updatedBy = req.user?.profile?.CODE;
+    if (!updatedBy) {
+      const error = new Error('Authenticated user profile is missing an employee code.');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    const deleted = await requestService.softDeleteRequest(req.params.id, updatedBy);
 
     if (!deleted) {
       const error = new Error(`Request ${req.params.id} was not found.`);
@@ -68,10 +76,10 @@ async function deleteRequest(req, res, next) {
 
     res.status(200).json({ success: true, data: { id: req.params.id }, correlationId });
 
-    logger.debug('Mock request deleted', {
+    logger.debug('Request soft deleted', {
       correlationId,
       route: { method: req.method, path: req.path },
-      payload: { id: req.params.id },
+      payload: { id: req.params.id, updatedBy },
     });
   } catch (error) {
     logger.error(`Error in deleteRequest: ${error.message}`, {
