@@ -26,9 +26,12 @@ function initModels(sequelize) {
   const Term = defineTerm(sequelize);
   const Status = defineStatus(sequelize);
 
-  // TB1 -> TB3 (USERS.ID = S_EMPLOYEE1.EMP_CODE)
+  // TB1 -> TB2 (USERS.ID = S_EMPLOYEE1.EMP_CODE)
   User.hasOne(Employee, { as: 'employee', foreignKey: 'EMP_CODE', sourceKey: 'ID' });
   Employee.belongsTo(User, { as: 'user', foreignKey: 'EMP_CODE', targetKey: 'ID' });
+
+  // TB1 -> TB3 (USERS.VIEW_AS = S_EMPLOYEE1.EMP_CODE)
+  User.belongsTo(Employee, { as: 'viewAsEmployee', foreignKey: 'VIEW_AS', targetKey: 'EMP_CODE' });
 
   // TB3 -> TB5 / TB3 -> TB6 (self-join via APPROVER_ID1 / APPROVER_ID2)
   Employee.belongsTo(Employee, { as: 'manager1', foreignKey: 'APPROVER_ID1', targetKey: 'EMP_CODE' });

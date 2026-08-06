@@ -9,6 +9,7 @@ module.exports = (sequelize) =>
         type: DataTypes.STRING,
         primaryKey: true,
       },
+      VIEW_AS: DataTypes.STRING,
     },
     {
       tableName: 'USERS',

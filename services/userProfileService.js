@@ -28,6 +28,11 @@ async function getUserProfileByEmail(email) {
         as: 'costCenter',
         required: false,
       },
+      {
+        model: Employee,
+        as: 'viewAsEmployee',
+        required: false,
+      },
     ],
   });
 
@@ -46,6 +51,7 @@ async function getUserProfileByEmail(email) {
   const manager1 = employee.manager1;
   const manager2 = employee.manager2;
   const costCenter = user.costCenter;
+  const viewAsEmployee = user.viewAsEmployee;
   const role = topUserRole ? topUserRole.role : null;
 
   return {
@@ -58,7 +64,7 @@ async function getUserProfileByEmail(email) {
     DEPARTMENT: costCenter ? costCenter.DEPARTMENT : null,
     USERNAME: employee.USERNAME || '',
     INITIALS: employee.INITIALS || '',
-      FULL_NAME: employee.NAME_ENG || '',
+    FULL_NAME: employee.NAME_ENG || '',
     EMAIL: employee.CURRENT_EMAIL || '',
     CODE_MANAGER_1: manager1 ? manager1.EMP_CODE : null,
     USERNAME_MANAGER_1: manager1 ? manager1.USERNAME || '' : '',
@@ -68,6 +74,10 @@ async function getUserProfileByEmail(email) {
     USERNAME_MANAGER_2: manager2 ? manager2.USERNAME || '' : '',
     INITIALS_MANAGER_2: manager2 ? manager2.INITIALS || '' : '',
     EMAIL_MANAGER_2: manager2 ? manager2.CURRENT_EMAIL || '' : '',
+    MAIN_CODE: employee.EMP_CODE || '',
+    MAIN_EMAIL: employee.CURRENT_EMAIL || '',
+    VIEW_AS_CODE: viewAsEmployee ? viewAsEmployee.EMP_CODE || '' : '',
+    VIEW_AS_EMAIL: viewAsEmployee ? viewAsEmployee.CURRENT_EMAIL || '' : '',
   };
 }
 
