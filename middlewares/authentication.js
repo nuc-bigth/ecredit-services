@@ -87,10 +87,11 @@ function authenticationMiddleware(req, res, next) {
     }
 
     // Attach user context to request object
+    // Entra ID access tokens usually omit the "email" claim; fall back to preferred_username/upn
     req.user = {
       oid: validation.claims.oid,
       tid: validation.claims.tid,
-      email: validation.claims.email,
+      email: validation.claims.email || validation.claims.preferred_username || validation.claims.upn || '',
       displayName: validation.claims.name,
       roles: validation.claims.roles || [],
     };

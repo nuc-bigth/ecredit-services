@@ -96,6 +96,21 @@ function listMockRequests(query) {
   };
 }
 
+function getMockRequestById(id) {
+  return mockRequests.find((request) => request.id === id) || null;
+}
+
+function deleteMockRequest(id) {
+  const index = mockRequests.findIndex((request) => request.id === id);
+  if (index === -1) {
+    return false;
+  }
+  mockRequests.splice(index, 1);
+  return true;
+}
+
 module.exports = {
   listMockRequests,
+  getMockRequestById,
+  deleteMockRequest,
 };

@@ -5,5 +5,7 @@ const requestController = require('../../controllers/qas/requestController');
 const router = express.Router();
 
 router.get('/', authenticationMiddleware, requestController.listRequests);
+router.get('/:id', authenticationMiddleware, requestController.getRequest);
+router.delete('/:id', authenticationMiddleware, requestController.deleteRequest);
 
 module.exports = router;
