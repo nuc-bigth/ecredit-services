@@ -10,6 +10,7 @@ module.exports = (sequelize) =>
         type: DataTypes.STRING,
         primaryKey: true,
       },
+      COST_CENTER_DESC: DataTypes.STRING,
       BU_ID: DataTypes.STRING,
       BU: DataTypes.STRING,
       DEPARTMENT_ID: DataTypes.STRING,

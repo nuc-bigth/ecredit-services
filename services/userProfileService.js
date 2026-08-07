@@ -54,10 +54,22 @@ async function getUserProfileByEmail(email) {
   const viewAsEmployee = user.viewAsEmployee;
   const role = topUserRole ? topUserRole.role : null;
 
+  let effectiveEmployee = employee;
+  let effectiveRole = role;
+  if (viewAsEmployee) {
+    const viewedUserRole = await UserRole.findOne({
+      where: { USER_ID: viewAsEmployee.EMP_CODE, ENABLED: '1' },
+      include: [{ model: Role, as: 'role', where: { ENABLED: '1' } }],
+      order: [[{ model: Role, as: 'role' }, 'LEVEL', 'DESC']],
+    });
+    effectiveEmployee = viewAsEmployee;
+    effectiveRole = viewedUserRole ? viewedUserRole.role : null;
+  }
+
   return {
     CODE: employee.EMP_CODE,
     ROLE_ID: role ? role.ID : null,
-    ROLE: role ? role.NAME : null,
+    ROLE: effectiveRole ? effectiveRole.NAME : null,
     BU_ID: costCenter ? costCenter.BU_ID : null,
     BU: costCenter ? costCenter.BU : null,
     DEPARTMENT_ID: costCenter ? costCenter.DEPARTMENT_ID : null,
@@ -78,6 +90,13 @@ async function getUserProfileByEmail(email) {
     MAIN_EMAIL: employee.CURRENT_EMAIL || '',
     VIEW_AS_CODE: viewAsEmployee ? viewAsEmployee.EMP_CODE || '' : '',
     VIEW_AS_EMAIL: viewAsEmployee ? viewAsEmployee.CURRENT_EMAIL || '' : '',
+    LOGGED_IN_CODE: employee.EMP_CODE || '',
+    LOGGED_IN_EMAIL: employee.CURRENT_EMAIL || '',
+    LOGGED_IN_ROLE: role ? role.NAME : null,
+    EFFECTIVE_CODE: effectiveEmployee.EMP_CODE || '',
+    EFFECTIVE_EMAIL: effectiveEmployee.CURRENT_EMAIL || '',
+    EFFECTIVE_ROLE: effectiveRole ? effectiveRole.NAME : null,
+    IS_VIEWING_AS: Boolean(viewAsEmployee),
   };
 }
 

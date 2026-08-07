@@ -7,6 +7,11 @@ const defineRequest = require('./request');
 const defineRating = require('./rating');
 const defineTerm = require('./term');
 const defineStatus = require('./status');
+const defineSize = require('./size');
+const defineCustomer = require('./customer');
+const definePermission = require('./permission');
+const defineRolePermission = require('./rolePermission');
+const defineUserPermission = require('./userPermission');
 
 /**
  * Sequelize model registry
@@ -25,6 +30,11 @@ function initModels(sequelize) {
   const Rating = defineRating(sequelize);
   const Term = defineTerm(sequelize);
   const Status = defineStatus(sequelize);
+  const Size = defineSize(sequelize);
+  const Customer = defineCustomer(sequelize);
+  const Permission = definePermission(sequelize);
+  const RolePermission = defineRolePermission(sequelize);
+  const UserPermission = defineUserPermission(sequelize);
 
   // TB1 -> TB2 (USERS.ID = S_EMPLOYEE1.EMP_CODE)
   User.hasOne(Employee, { as: 'employee', foreignKey: 'EMP_CODE', sourceKey: 'ID' });
@@ -52,6 +62,17 @@ function initModels(sequelize) {
   Request.belongsTo(Employee, { as: 'requestedByEmployee', foreignKey: 'REQUESTED_BY', targetKey: 'EMP_CODE' });
   Request.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
 
+  Customer.belongsTo(Size, { as: 'size', foreignKey: 'SIZE_ID' });
+  Customer.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
+
+  // ROLE_PERMISSIONS: Role <-> Permission grants
+  RolePermission.belongsTo(Role, { as: 'role', foreignKey: 'ROLE_ID' });
+  RolePermission.belongsTo(Permission, { as: 'permission', foreignKey: 'PERMISSION_ID' });
+
+  // USER_PERMISSIONS: per-user override of role-derived permission grants
+  UserPermission.belongsTo(Permission, { as: 'permission', foreignKey: 'PERMISSION_ID' });
+  UserPermission.belongsTo(User, { as: 'user', foreignKey: 'USER_ID', targetKey: 'ID' });
+
   models = {
     User,
     Employee,
@@ -62,6 +83,11 @@ function initModels(sequelize) {
     Rating,
     Term,
     Status,
+    Size,
+    Customer,
+    Permission,
+    RolePermission,
+    UserPermission,
   };
   return models;
 }

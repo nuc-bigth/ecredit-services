@@ -5,6 +5,9 @@ const sessionRoute = require('./sessionRoute');
 const healthRoute = require('./healthRoute');
 const docsRoute = require('./docsRoute');
 const requestRoute = require('./requestRoute');
+const customerRoute = require('./customerRoute');
+const permissionRoute = require('./permissionRoute');
+const userRoute = require('./userRoute');
 
 /**
  * Dev Environment Route Aggregator
@@ -22,6 +25,9 @@ router.use('/home', homeRoute);
 router.use('/auth', authRoute);
 router.use('/session', sessionRoute);
 router.use('/requests', requestRoute);
+router.use('/customers', customerRoute);
+router.use('/permissions', permissionRoute);
+router.use('/users', userRoute);
 router.use('/health', healthRoute);
 router.use('/docs', docsRoute);
 

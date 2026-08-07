@@ -1,21 +1,19 @@
 const { DataTypes } = require('sequelize');
 
-// USERS: anchor table linking Entra ID identity to employee/role/cost-center data
 module.exports = (sequelize) =>
   sequelize.define(
-    'User',
+    'Permission',
     {
       ID: {
         type: DataTypes.STRING,
         primaryKey: true,
       },
-      VIEW_AS: DataTypes.STRING,
+      NAME: DataTypes.STRING,
       ENABLED: DataTypes.STRING,
-      UPDATED_DATE: DataTypes.DATE,
-      UPDATED_BY: DataTypes.STRING,
+      SORTING: DataTypes.INTEGER,
     },
     {
-      tableName: 'USERS',
+      tableName: 'PERMISSIONS',
       timestamps: false,
     },
   );
