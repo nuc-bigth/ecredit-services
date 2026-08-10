@@ -86,6 +86,32 @@ function mapUser(employee) {
   };
 }
 
+function mapUserDetail(employee) {
+  const user = employee.user;
+  const costCenter = user?.costCenter;
+  const roles = (user?.userRoles || [])
+    .filter((userRole) => isEnabled(userRole.ENABLED) && isEnabled(userRole.role?.ENABLED))
+    .map((userRole) => userRole.role.NAME)
+    .filter(Boolean);
+
+  return {
+    CODE: employee.EMP_CODE,
+    ROLE: roles[0] || null,
+    ROLES: [...new Set(roles)],
+    BU: costCenter?.BU || '',
+    DEPARTMENT: costCenter?.DEPARTMENT || '',
+    USERNAME: employee.USERNAME || '',
+    INITIALS: employee.INITIALS || '',
+    FULL_NAME: employee.NAME_ENG || '',
+    EMAIL: (employee.CURRENT_EMAIL || '').toLowerCase(),
+    CODE_MANAGER_1: employee.manager1?.EMP_CODE || null,
+    USERNAME_MANAGER_1: employee.manager1?.USERNAME || '',
+    CODE_MANAGER_2: employee.manager2?.EMP_CODE || null,
+    USERNAME_MANAGER_2: employee.manager2?.USERNAME || '',
+    SYSTEM_ACTIVE: isEnabled(user?.ENABLED),
+  };
+}
+
 async function listUsers(query) {
   const models = getModels();
   const { Employee, User, CostCenterMapping, UserRole, Role } = models;
@@ -116,6 +142,23 @@ async function listUsers(query) {
       totalPages: Math.max(1, Math.ceil(result.count / pageSize)),
     },
   };
+}
+
+async function getUserDetail(code) {
+  const { Employee, User, CostCenterMapping, UserRole, Role } = getModels();
+  const employee = await Employee.findOne({
+    where: { EMP_CODE: code },
+    include: [
+      { model: User, as: 'user', required: true, include: [
+        { model: CostCenterMapping, as: 'costCenter', required: false },
+        { model: UserRole, as: 'userRoles', required: false, include: [{ model: Role, as: 'role', required: false }] },
+      ] },
+      { model: Employee, as: 'manager1', required: false },
+      { model: Employee, as: 'manager2', required: false },
+    ],
+  });
+
+  return employee ? mapUserDetail(employee) : null;
 }
 
 async function setSystemActive(code, enabled, updatedBy) {
@@ -156,4 +199,4 @@ async function clearViewAs(actorCode) {
   );
 }
 
-module.exports = { listUsers, setSystemActive, setViewAs, clearViewAs };
+module.exports = { listUsers, getUserDetail, setSystemActive, setViewAs, clearViewAs };

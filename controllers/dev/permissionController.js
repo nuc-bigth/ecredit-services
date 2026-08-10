@@ -11,7 +11,7 @@ function isValidSelection(selection) {
 }
 
 function requireSystemAdmin(req) {
-  if ((req.user?.profile?.LOGGED_IN_ROLE || req.user?.profile?.ROLE) === 'System Admin') {
+  if (req.user?.profile?.ROLE === 'System Admin') {
     return;
   }
 

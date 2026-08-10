@@ -4,6 +4,9 @@ const userController = require('../../controllers/dev/userController');
 
 const router = express.Router();
 router.get('/', authenticationMiddleware, userController.listUsers);
+router.get('/:code', authenticationMiddleware, userController.getUserDetail);
+router.get('/:code/permissions', authenticationMiddleware, userController.getUserPermissions);
+router.put('/:code/permissions', authenticationMiddleware, userController.updateUserPermissions);
 router.patch('/:code/system-active', authenticationMiddleware, userController.updateSystemActive);
 router.put('/:code/view-as', authenticationMiddleware, userController.setViewAs);
 router.delete('/view-as', authenticationMiddleware, userController.clearViewAs);

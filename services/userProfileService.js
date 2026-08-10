@@ -1,5 +1,15 @@
 const { getModels } = require('../models');
 
+async function getEnabledRoleNames(userId) {
+  const { UserRole, Role } = getModels();
+  const userRoles = await UserRole.findAll({
+    where: { USER_ID: userId, ENABLED: '1' },
+    include: [{ model: Role, as: 'role', where: { ENABLED: '1' } }],
+    order: [[{ model: Role, as: 'role' }, 'LEVEL', 'DESC']],
+  });
+  return userRoles.map((userRole) => userRole.role.NAME);
+}
+
 /**
  * Look up the full permission/profile record for a user by their M365 email.
  * Mirrors the legacy raw SQL query (USERS + USER_ROLES/ROLES + S_EMPLOYEE1 + S_MAPPING_COST_CENTER).
@@ -56,36 +66,55 @@ async function getUserProfileByEmail(email) {
 
   let effectiveEmployee = employee;
   let effectiveRole = role;
+  let effectiveCostCenter = costCenter;
+  let effectiveManager1 = manager1;
+  let effectiveManager2 = manager2;
+  let effectiveRoles = await getEnabledRoleNames(employee.EMP_CODE);
   if (viewAsEmployee) {
     const viewedUserRole = await UserRole.findOne({
       where: { USER_ID: viewAsEmployee.EMP_CODE, ENABLED: '1' },
       include: [{ model: Role, as: 'role', where: { ENABLED: '1' } }],
       order: [[{ model: Role, as: 'role' }, 'LEVEL', 'DESC']],
     });
+    const viewedEmployee = await Employee.findOne({
+      where: { EMP_CODE: viewAsEmployee.EMP_CODE },
+      include: [
+        { model: Employee, as: 'manager1' },
+        { model: Employee, as: 'manager2' },
+      ],
+    });
+    const viewedCostCenter = await CostCenterMapping.findOne({
+      where: { EMPLOYEE_CODE: viewAsEmployee.EMP_CODE },
+    });
     effectiveEmployee = viewAsEmployee;
     effectiveRole = viewedUserRole ? viewedUserRole.role : null;
+    effectiveCostCenter = viewedCostCenter;
+    effectiveManager1 = viewedEmployee ? viewedEmployee.manager1 : null;
+    effectiveManager2 = viewedEmployee ? viewedEmployee.manager2 : null;
+    effectiveRoles = await getEnabledRoleNames(viewAsEmployee.EMP_CODE);
   }
 
   return {
-    CODE: employee.EMP_CODE,
-    ROLE_ID: role ? role.ID : null,
+    CODE: effectiveEmployee.EMP_CODE,
+    ROLE_ID: effectiveRole ? effectiveRole.ID : null,
     ROLE: effectiveRole ? effectiveRole.NAME : null,
-    BU_ID: costCenter ? costCenter.BU_ID : null,
-    BU: costCenter ? costCenter.BU : null,
-    DEPARTMENT_ID: costCenter ? costCenter.DEPARTMENT_ID : null,
-    DEPARTMENT: costCenter ? costCenter.DEPARTMENT : null,
-    USERNAME: employee.USERNAME || '',
-    INITIALS: employee.INITIALS || '',
-    FULL_NAME: employee.NAME_ENG || '',
-    EMAIL: employee.CURRENT_EMAIL || '',
-    CODE_MANAGER_1: manager1 ? manager1.EMP_CODE : null,
-    USERNAME_MANAGER_1: manager1 ? manager1.USERNAME || '' : '',
-    INITIALS_MANAGER_1: manager1 ? manager1.INITIALS || '' : '',
-    EMAIL_MANAGER_1: manager1 ? manager1.CURRENT_EMAIL || '' : '',
-    CODE_MANAGER_2: manager2 ? manager2.EMP_CODE : null,
-    USERNAME_MANAGER_2: manager2 ? manager2.USERNAME || '' : '',
-    INITIALS_MANAGER_2: manager2 ? manager2.INITIALS || '' : '',
-    EMAIL_MANAGER_2: manager2 ? manager2.CURRENT_EMAIL || '' : '',
+    ROLES: effectiveRoles,
+    BU_ID: effectiveCostCenter ? effectiveCostCenter.BU_ID : null,
+    BU: effectiveCostCenter ? effectiveCostCenter.BU : null,
+    DEPARTMENT_ID: effectiveCostCenter ? effectiveCostCenter.DEPARTMENT_ID : null,
+    DEPARTMENT: effectiveCostCenter ? effectiveCostCenter.DEPARTMENT : null,
+    USERNAME: effectiveEmployee.USERNAME || '',
+    INITIALS: effectiveEmployee.INITIALS || '',
+    FULL_NAME: effectiveEmployee.NAME_ENG || '',
+    EMAIL: effectiveEmployee.CURRENT_EMAIL || '',
+    CODE_MANAGER_1: effectiveManager1 ? effectiveManager1.EMP_CODE : null,
+    USERNAME_MANAGER_1: effectiveManager1 ? effectiveManager1.USERNAME || '' : '',
+    INITIALS_MANAGER_1: effectiveManager1 ? effectiveManager1.INITIALS || '' : '',
+    EMAIL_MANAGER_1: effectiveManager1 ? effectiveManager1.CURRENT_EMAIL || '' : '',
+    CODE_MANAGER_2: effectiveManager2 ? effectiveManager2.EMP_CODE : null,
+    USERNAME_MANAGER_2: effectiveManager2 ? effectiveManager2.USERNAME || '' : '',
+    INITIALS_MANAGER_2: effectiveManager2 ? effectiveManager2.INITIALS || '' : '',
+    EMAIL_MANAGER_2: effectiveManager2 ? effectiveManager2.CURRENT_EMAIL || '' : '',
     MAIN_CODE: employee.EMP_CODE || '',
     MAIN_EMAIL: employee.CURRENT_EMAIL || '',
     VIEW_AS_CODE: viewAsEmployee ? viewAsEmployee.EMP_CODE || '' : '',

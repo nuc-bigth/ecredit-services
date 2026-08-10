@@ -55,8 +55,20 @@ async function getEffectivePermissions(userId) {
  * Apply checkbox selections to the ROLE_PERMISSIONS records identified by permission name.
  */
 async function updateRolePermissions(userId, selections) {
-  const { Permission, RolePermission } = getModels();
+  const { Permission, RolePermission, UserRole } = getModels();
   const sequelize = getDatabase();
+
+  const userRoles = await UserRole.findAll({
+    where: { USER_ID: userId, ENABLED: '1' },
+    attributes: ['ROLE_ID'],
+  });
+  const roleIds = [...new Set(userRoles.map((userRole) => userRole.ROLE_ID))];
+  if (roleIds.length === 0) {
+    const error = new Error('User has no enabled roles to update.');
+    error.statusCode = 400;
+    error.code = errorCodes.VALIDATION_ERROR;
+    throw error;
+  }
 
   const names = [...new Set(selections.map((selection) => selection.NAME))];
   const catalog = await Permission.findAll({
@@ -76,7 +88,7 @@ async function updateRolePermissions(userId, selections) {
   await sequelize.transaction(async (transaction) => {
     for (const selection of selections) {
       const permissionId = permissionIdsByName.get(selection.NAME);
-      const where = { PERMISSION_ID: permissionId };
+      const where = { PERMISSION_ID: permissionId, ROLE_ID: { [Op.in]: roleIds } };
 
       if (!selection.GRANTED) {
         where.ENABLED = '1';
