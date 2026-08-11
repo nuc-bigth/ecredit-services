@@ -1,4 +1,5 @@
-const { Op, fn, col, where } = require('sequelize');
+const { Op, fn, col, where, QueryTypes } = require('sequelize');
+const { getDatabase } = require('../config/database');
 const { getModels } = require('../models');
 
 const QUICK_FILTERS = new Set(['rating', 'limit', 'term']);
@@ -195,7 +196,7 @@ function formatUpdatedDate(value) {
   return `${part('day')} ${part('month')} ${part('year')} ${part('hour')}:${part('minute')} ${part('dayPeriod').toUpperCase()}`;
 }
 
-function mapRequest(request) {
+function mapRequest(request, customer) {
   const requestedRating = request.requestedRating?.NAME || '';
   const approvedRating = request.approvedRating?.NAME || '';
   const requestedTerm = request.requestedTerm?.NAME || '';
@@ -214,6 +215,7 @@ function mapRequest(request) {
     SUBJECT: request.DESCRIPTION || '',
     SOLD_TO: request.SOLD_TO || '',
     SEARCH_TERM: request.SEARCH_TERM || '',
+    REQUESTED_RATING_ID: request.REQUESTED_RATING_ID || '',
     REQUESTED_RATING: requestedRating,
     REQUESTED_LIMIT: requestedLimit,
     REQUESTED_TERM: requestedTerm,
@@ -224,7 +226,9 @@ function mapRequest(request) {
     STATUS: request.status?.NAME || '',
     REQUESTED_NAME: employeeName(request.requestedByEmployee),
     UPDATED_NAME: employeeName(request.updatedByEmployee),
+    CREATED_DATE: formatUpdatedDate(request.CREATED_DATE),
     UPDATED_DATE: formatUpdatedDate(request.UPDATED_DATE),
+    CUSTOMER: customer || null,
     IS_RATING_REQUESTED: isNonBlank(requestedRating) ? 1 : 0,
     IS_LIMIT_REQUESTED: requestedLimit !== 0 ? 1 : 0,
     IS_TERM_REQUESTED: isNonBlank(requestedTerm) ? 1 : 0,
@@ -232,6 +236,35 @@ function mapRequest(request) {
     IS_LIMIT_APPROVED: approvedLimit !== 0 ? 1 : 0,
     IS_TERM_APPROVED: isNonBlank(approvedTerm) ? 1 : 0,
   };
+}
+
+async function findCustomerDetails(crmNo) {
+  if (!isNonBlank(crmNo)) return null;
+
+  const [customers] = await getDatabase().query(
+    `SELECT TOP (1)
+      C.ID AS id,
+      C.TAX_NO AS taxNo,
+      CONVERT(char(10), C.REGISTERED_DATE, 23) AS registeredDate,
+      C.REGISTERED_CAPITAL_AMOUNT AS registeredCapitalAmount,
+      C.SIZE_ID AS sizeId,
+      S.NAME AS sizeName,
+      C.BUSINESS_TYPE_INTER AS businessType,
+      C.CUSTOMER_TYPE_INTER AS customerType,
+      C.DIRECTORS AS directors,
+      C.SHAREHOLDERS AS shareholders,
+      SC.ADDRESS_ENG_TELEPHONE AS phone,
+      SC.ADDRESS_ENG_FAX AS faxId,
+      SC.ADDRESS_ENG AS address
+    FROM S_CUSTOMER SC
+    INNER JOIN CUSTOMERS C ON C.TAX_NO = SC.TAX_NO AND C.ENABLED = '1'
+    LEFT JOIN SIZES S ON S.ID = C.SIZE_ID
+    WHERE SC.CUST_NO = :crmNo
+    ORDER BY C.UPDATED_DATE DESC`,
+    { replacements: { crmNo }, type: QueryTypes.SELECT },
+  );
+
+  return customers || null;
 }
 
 function buildOrder(sort, dir) {
@@ -281,7 +314,10 @@ async function getRequestById(id) {
     include: buildIncludes(models),
   });
 
-  return request ? mapRequest(request) : null;
+  if (!request) return null;
+
+  const customer = await findCustomerDetails(request.CRM_NO);
+  return mapRequest(request, customer);
 }
 
 async function softDeleteRequest(id, updatedBy) {

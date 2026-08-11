@@ -198,8 +198,12 @@ function mapCustomer(customer) {
     CUSTOMER_NAME: customer.get('CUSTOMER_NAME') || '',
     REGISTERED_DATE: formatDate(customer.REGISTERED_DATE),
     REGISTERED_CAPITAL_AMOUNT: toNumber(customer.REGISTERED_CAPITAL_AMOUNT),
+    SIZE_ID: customer.SIZE_ID || '',
     SIZE: customer.size?.NAME || '',
     BUSINESS_TYPE: customer.BUSINESS_TYPE_INTER || '',
+    CUSTOMER_TYPE: customer.CUSTOMER_TYPE_INTER || '',
+    DIRECTORS: customer.DIRECTORS || '',
+    SHAREHOLDERS: customer.SHAREHOLDERS || '',
     UPDATED_DATE: formatUpdatedDate(customer.UPDATED_DATE),
     UPDATED_BY: employeeName(customer.updatedByEmployee),
   };
@@ -257,6 +261,62 @@ async function getCustomerById(id) {
   return customer ? mapCustomer(customer) : null;
 }
 
+function validationError(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  error.code = 'VALIDATION_ERROR';
+  return error;
+}
+
+function normalizeCustomerUpdate(payload) {
+  const fields = ['TAX_NO', 'REGISTERED_DATE', 'REGISTERED_CAPITAL_AMOUNT', 'SIZE_ID', 'BUSINESS_TYPE_INTER', 'CUSTOMER_TYPE_INTER', 'DIRECTORS', 'SHAREHOLDERS'];
+  const update = {};
+
+  fields.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(payload, field)) update[field] = payload[field];
+  });
+
+  if (!Object.keys(update).length) throw validationError('No customer fields were supplied.');
+  if (typeof update.TAX_NO === 'string' && update.TAX_NO.length > 13) throw validationError('TAX_NO must not exceed 13 characters.');
+  ['BUSINESS_TYPE_INTER', 'CUSTOMER_TYPE_INTER', 'DIRECTORS', 'SHAREHOLDERS'].forEach((field) => {
+    if (typeof update[field] === 'string' && update[field].length > 2048) throw validationError(`${field} must not exceed 2048 characters.`);
+  });
+  if (update.REGISTERED_DATE !== undefined && update.REGISTERED_DATE !== null && update.REGISTERED_DATE !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(update.REGISTERED_DATE)) {
+    throw validationError('REGISTERED_DATE must use YYYY-MM-DD.');
+  }
+  if (update.REGISTERED_CAPITAL_AMOUNT !== undefined && update.REGISTERED_CAPITAL_AMOUNT !== null && update.REGISTERED_CAPITAL_AMOUNT !== '') {
+    const capitalAmount = Number(update.REGISTERED_CAPITAL_AMOUNT);
+    if (!Number.isFinite(capitalAmount) || !/^\d+(\.\d{1,4})?$/.test(String(update.REGISTERED_CAPITAL_AMOUNT))) {
+      throw validationError('REGISTERED_CAPITAL_AMOUNT must be a decimal with up to 4 decimal places.');
+    }
+    update.REGISTERED_CAPITAL_AMOUNT = capitalAmount;
+  }
+
+  return update;
+}
+
+async function listEnabledSizes() {
+  const { Size } = getModels();
+  const sizes = await Size.findAll({ where: { ENABLED: '1' }, order: [['SORTING', 'ASC'], ['NAME', 'ASC']] });
+  return sizes.map((size) => ({ id: size.ID, label: size.NAME }));
+}
+
+async function updateCustomer(id, payload, updatedBy) {
+  const { Customer, Size } = getModels();
+  const update = normalizeCustomerUpdate(payload);
+
+  if (update.SIZE_ID) {
+    const size = await Size.findOne({ where: { ID: update.SIZE_ID, ENABLED: '1' } });
+    if (!size) throw validationError('SIZE_ID must reference an enabled size.');
+  }
+
+  const [affectedRows] = await Customer.update(
+    { ...update, UPDATED_DATE: new Date(), UPDATED_BY: updatedBy },
+    { where: { ID: id, ENABLED: '1' } },
+  );
+  return affectedRows ? getCustomerById(id) : null;
+}
+
 async function softDeleteCustomer(id, updatedBy) {
   const { Customer } = getModels();
   const [affectedRows] = await Customer.update(
@@ -273,6 +333,8 @@ async function softDeleteCustomer(id, updatedBy) {
 
 module.exports = {
   listCustomers,
+  listEnabledSizes,
   getCustomerById,
   softDeleteCustomer,
+  updateCustomer,
 };

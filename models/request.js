@@ -24,6 +24,7 @@ module.exports = (sequelize) =>
       APPROVED_TERM_ID: DataTypes.STRING,
       STATUS_ID: DataTypes.STRING,
       REQUESTED_BY: DataTypes.STRING,
+      CREATED_DATE: DataTypes.DATE,
       UPDATED_BY: DataTypes.STRING,
       UPDATED_DATE: DataTypes.DATE,
       ENABLED: DataTypes.STRING,

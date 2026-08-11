@@ -4,6 +4,10 @@ function mapOption(record) {
   return { id: record.ID, label: record.NAME };
 }
 
+function mapRatingOption(record) {
+  return { id: record.ID, label: record.NAME, color: record.COLOR_CODE || '' };
+}
+
 async function listEnabledStatuses() {
   const { Status } = getModels();
   const statuses = await Status.findAll({
@@ -22,4 +26,13 @@ async function listEnabledLogTypes() {
   return logTypes.map(mapOption);
 }
 
-module.exports = { listEnabledLogTypes, listEnabledStatuses };
+async function listEnabledRatings() {
+  const { Rating } = getModels();
+  const ratings = await Rating.findAll({
+    where: { ENABLED: '1' },
+    order: [['NAME', 'ASC']],
+  });
+  return ratings.map(mapRatingOption);
+}
+
+module.exports = { listEnabledLogTypes, listEnabledRatings, listEnabledStatuses };

@@ -8,7 +8,9 @@ module.exports = (sequelize) =>
         type: DataTypes.STRING,
         primaryKey: true,
       },
+      COLOR_CODE: DataTypes.STRING,
       NAME: DataTypes.STRING,
+      ENABLED: DataTypes.STRING,
     },
     {
       tableName: 'RATINGS',

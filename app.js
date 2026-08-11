@@ -109,7 +109,7 @@ const limiter = rateLimit({
   standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
   legacyHeaders: false, // Disable `X-RateLimit-*` headers
 });
-app.use(limiter);
+// app.use(limiter);
 
 // Request logging
 app.use(requestLoggerMiddleware);

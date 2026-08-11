@@ -9,6 +9,8 @@ module.exports = (sequelize) =>
         primaryKey: true,
       },
       NAME: DataTypes.STRING,
+      ENABLED: DataTypes.STRING,
+      SORTING: DataTypes.INTEGER,
     },
     {
       tableName: 'SIZES',

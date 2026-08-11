@@ -54,6 +54,38 @@ async function getCustomer(req, res, next) {
   }
 }
 
+async function listEnabledSizes(req, res, next) {
+  try {
+    const data = await customerService.listEnabledSizes();
+    res.status(200).json({ success: true, data, correlationId: res.locals.correlationId || 'N/A' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateCustomer(req, res, next) {
+  try {
+    const correlationId = res.locals.correlationId || 'N/A';
+    const updatedBy = req.user?.profile?.CODE;
+    if (!updatedBy) {
+      const error = new Error('Authenticated user profile is missing an employee code.');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+    const customer = await customerService.updateCustomer(req.params.id, req.body, updatedBy);
+    if (!customer) {
+      const error = new Error(`Customer ${req.params.id} was not found.`);
+      error.statusCode = 404;
+      error.code = 'RESOURCE_NOT_FOUND';
+      throw error;
+    }
+    res.status(200).json({ success: true, data: customer, correlationId });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function deleteCustomer(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
@@ -91,4 +123,4 @@ async function deleteCustomer(req, res, next) {
   }
 }
 
-module.exports = { listCustomers, getCustomer, deleteCustomer };
+module.exports = { listCustomers, listEnabledSizes, getCustomer, updateCustomer, deleteCustomer };

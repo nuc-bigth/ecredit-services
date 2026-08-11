@@ -10,6 +10,7 @@ const router = express.Router();
 router.get('/', authenticationMiddleware, requestController.listRequests);
 router.get('/statuses', authenticationMiddleware, requestMetadataController.listEnabledStatuses);
 router.get('/log-types', authenticationMiddleware, requestMetadataController.listEnabledLogTypes);
+router.get('/ratings', authenticationMiddleware, requestMetadataController.listEnabledRatings);
 router.get('/:requestId/event-logs', authenticationMiddleware, eventLogController.listRequestEvents);
 router.get('/:requestId/event-logs/:logId', authenticationMiddleware, eventLogController.getRequestEvent);
 router.get('/:requestId/attachments', authenticationMiddleware, attachmentController.listAttachments);
