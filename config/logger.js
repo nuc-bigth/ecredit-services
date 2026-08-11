@@ -1,22 +1,17 @@
 const winston = require('winston');
-const path = require('path');
-const fs = require('fs');
-const DailyRotateFile = require('winston-daily-rotate-file');
+const Transport = require('winston-transport');
+const { v4: uuidv4 } = require('uuid');
 const config = require('./env');
+const { getModels, isModelsInitialized } = require('../models');
 
 /**
  * Logger Configuration Module
  * Sets up Winston logger with:
  * - Console transport (dev only)
- * - Daily rotating file transports (all environments)
+ * - Database transport for durable event records
  * - Token/secret redaction
  * - Correlation ID support
  */
-
-// Ensure logs directory exists
-if (!fs.existsSync(config.logging.directory)) {
-  fs.mkdirSync(config.logging.directory, { recursive: true });
-}
 
 /**
  * List of sensitive fields to redact in logs
@@ -42,6 +37,12 @@ const CONSOLE_COLORS = {
   debug: '\x1b[36m',
 };
 const CONSOLE_COLOR_RESET = '\x1b[0m';
+const LOG_TYPE_IDS = {
+  info: '23556cea-337f-475c-9b6a-830bfa08ab93',
+  error: '2d8e6e9d-0b7b-427f-a5ba-0e65f61d945b',
+  warn: '69bd78f0-a012-4d47-bfed-4c0abd316877',
+  debug: 'e5bcffe9-8d7e-4d30-b828-37de41561f25',
+};
 
 /**
  * Redact sensitive values from log message
@@ -145,6 +146,51 @@ function formatReadableEntry(entry) {
   return `[${entry.timestamp}] [${entry.level.toUpperCase()}] [env=${entry.env}] [correlationId=${entry.correlationId}]${route} ${entry.message}${payload}${stack}`;
 }
 
+function requestIdFromPath(requestPath) {
+  const match = String(requestPath || '').match(/\/requests\/([^/?]+)/i);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function actorCode(info) {
+  const value = Number(info.actorCode ?? info.updatedBy ?? info.payload?.updatedBy);
+  return Number.isSafeInteger(value) ? value : null;
+}
+
+async function persistLogEntry(info) {
+  if (!isModelsInitialized()) return;
+
+  const entry = createLogEntry(info);
+  const requestId = requestIdFromPath(entry.route?.path || info.path);
+  const { Log } = getModels();
+  const databaseNow = Log.sequelize.literal('GETDATE()');
+
+  await Log.create({
+    ID: uuidv4(),
+    NAME: entry.message,
+    DESCRIPTION: JSON.stringify({ ...entry, requestId }),
+    LOG_TYPE_ID: LOG_TYPE_IDS[entry.level] || LOG_TYPE_IDS.debug,
+    CATEGORY: requestId ? 'request.activity' : 'system.activity',
+    REQUEST_ID: requestId,
+    CREATED_DATE: databaseNow,
+    UPDATED_DATE: databaseNow,
+    CREATED_BY: actorCode(info),
+    UPDATED_BY: actorCode(info),
+    ENABLED: true,
+  });
+}
+
+class DatabaseTransport extends Transport {
+  log(info, callback) {
+    setImmediate(() => this.emit('logged', info));
+    persistLogEntry(info).catch((error) => {
+      if (config.isDevelopment()) {
+        console.error(`Unable to persist application log: ${error.message}`);
+      }
+    });
+    callback();
+  }
+}
+
 /**
  * Custom format for log entries
  */
@@ -197,30 +243,7 @@ if (config.isDevelopment()) {
   );
 }
 
-// File transports: enabled in all environments
-// Main application log
-transports.push(
-  new DailyRotateFile({
-    filename: path.join(config.logging.directory, `ecredit-%environment%-${config.environment}-%date%.txt`),
-    datePattern: 'YYYY-MM-DD',
-    maxSize: '20m',
-    maxDays: '30d',
-    level: config.logging.level,
-    format: logFormat,
-  }),
-);
-
-// Error log (only errors and above)
-transports.push(
-  new DailyRotateFile({
-    filename: path.join(config.logging.directory, `ecredit-error-${config.environment}-%date%.txt`),
-    datePattern: 'YYYY-MM-DD',
-    maxSize: '20m',
-    maxDays: '30d',
-    level: 'error',
-    format: logFormat,
-  }),
-);
+transports.push(new DatabaseTransport());
 
 /**
  * Create and export logger instance
@@ -232,22 +255,10 @@ const logger = winston.createLogger({
     environment: config.environment,
   },
   transports,
-  exceptionHandlers: [
-    new DailyRotateFile({
-      filename: path.join(config.logging.directory, `ecredit-exceptions-${config.environment}-%date%.txt`),
-      datePattern: 'YYYY-MM-DD',
-      maxSize: '20m',
-      maxDays: '30d',
-    }),
-  ],
-  rejectionHandlers: [
-    new DailyRotateFile({
-      filename: path.join(config.logging.directory, `ecredit-rejections-${config.environment}-%date%.txt`),
-      datePattern: 'YYYY-MM-DD',
-      maxSize: '20m',
-      maxDays: '30d',
-    }),
-  ],
 });
+
+logger.redactPayload = redactPayload;
+logger.redactSensitiveData = redactSensitiveData;
+logger.persistLogEntry = persistLogEntry;
 
 module.exports = logger;

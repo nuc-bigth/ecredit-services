@@ -1,4 +1,5 @@
 const logger = require('../config/logger');
+const { persistRequestEvent } = require('../services/eventLogService');
 
 /**
  * Request Logger Middleware
@@ -21,38 +22,17 @@ function requestLoggerMiddleware(req, res, next) {
   const startTime = Date.now();
   const method = req.method;
   const path = req.path;
-  const route = { method, path, query: req.query };
-  const requestPayload = {
-    query: req.query,
-    bodyFields: Object.keys(req.body || {}),
-  };
 
-  // Log incoming request (development only)
-  if (process.env.NODE_ENV === 'dev') {
-    logger.debug('Request received', {
-      correlationId,
-      route,
-      payload: {
-        ...requestPayload,
-        clientIp: req.ip,
-      },
-    });
-  }
-
-  // Capture response finish to log response metadata
+  // Capture response finish so authenticated user context and status are available.
   res.on('finish', () => {
     const duration = Date.now() - startTime;
-    const statusCode = res.statusCode;
-    const logLevel = statusCode >= 400 ? 'warn' : 'info';
 
-    logger.log(logLevel, 'Request completed', {
-      correlationId,
-      route,
-      payload: {
-        statusCode,
-        durationMs: duration,
-        clientIp: req.ip,
-      },
+    persistRequestEvent({ req, res, durationMs: duration }).catch((error) => {
+      logger.error(`Unable to persist request event log: ${error.message}`, {
+        correlationId,
+        route: { method, path, query: req.query },
+        stack: error.stack,
+      });
     });
   });
 

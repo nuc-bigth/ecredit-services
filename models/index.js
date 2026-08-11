@@ -12,6 +12,9 @@ const defineCustomer = require('./customer');
 const definePermission = require('./permission');
 const defineRolePermission = require('./rolePermission');
 const defineUserPermission = require('./userPermission');
+const defineAttachment = require('./attachment');
+const defineLog = require('./log');
+const defineLogType = require('./logType');
 
 /**
  * Sequelize model registry
@@ -35,6 +38,9 @@ function initModels(sequelize) {
   const Permission = definePermission(sequelize);
   const RolePermission = defineRolePermission(sequelize);
   const UserPermission = defineUserPermission(sequelize);
+  const Attachment = defineAttachment(sequelize);
+  const Log = defineLog(sequelize);
+  const LogType = defineLogType(sequelize);
 
   // TB1 -> TB2 (USERS.ID = S_EMPLOYEE1.EMP_CODE)
   User.hasOne(Employee, { as: 'employee', foreignKey: 'EMP_CODE', sourceKey: 'ID' });
@@ -61,9 +67,14 @@ function initModels(sequelize) {
   Request.belongsTo(Status, { as: 'status', foreignKey: 'STATUS_ID' });
   Request.belongsTo(Employee, { as: 'requestedByEmployee', foreignKey: 'REQUESTED_BY', targetKey: 'EMP_CODE' });
   Request.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
+  Request.hasMany(Attachment, { as: 'attachments', foreignKey: 'REQUEST_ID', sourceKey: 'ID' });
+  Attachment.belongsTo(Request, { as: 'request', foreignKey: 'REQUEST_ID', targetKey: 'ID' });
+  Attachment.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
 
   Customer.belongsTo(Size, { as: 'size', foreignKey: 'SIZE_ID' });
   Customer.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
+
+  Log.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
 
   // ROLE_PERMISSIONS: Role <-> Permission grants
   RolePermission.belongsTo(Role, { as: 'role', foreignKey: 'ROLE_ID' });
@@ -88,6 +99,9 @@ function initModels(sequelize) {
     Permission,
     RolePermission,
     UserPermission,
+    Attachment,
+    Log,
+    LogType,
   };
   return models;
 }
@@ -99,7 +113,17 @@ function getModels() {
   return models;
 }
 
+function isModelsInitialized() {
+  return Boolean(models);
+}
+
+function resetModels() {
+  models = null;
+}
+
 module.exports = {
   initModels,
   getModels,
+  isModelsInitialized,
+  resetModels,
 };

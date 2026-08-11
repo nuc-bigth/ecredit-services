@@ -83,6 +83,27 @@ DB_PASSWORD=<actual_password>
 # ... other required variables
 ```
 
+### SharePoint attachment storage
+
+Attachments use the existing file share by default. Before enabling SharePoint, apply
+`database/migrations/20260811_add_attachment_storage_metadata.sql` through the SQL Server
+deployment process. The script is idempotent and marks existing rows as `FILE_SHARE`.
+
+Set these values in each environment only after the migration has been applied:
+
+```bash
+ATTACHMENT_STORAGE_PROVIDER=SHAREPOINT
+GRAPH_CLIENT_ID=<Entra application client ID>
+GRAPH_CLIENT_SECRET=<application secret from the deployment secret store>
+GRAPH_DRIVE_ID=<SharePoint document library drive ID>
+GRAPH_ROOT_FOLDER_ID=<eCredit root folder item ID>
+```
+
+The Entra application must use application permissions restricted to the selected SharePoint
+site/library. New files are stored through Microsoft Graph; the download URL remains an
+authenticated eCredit API endpoint. Keep the legacy file-share configuration until existing
+attachments have been migrated.
+
 ## Available Environments
 
 Start the API for a specific environment:

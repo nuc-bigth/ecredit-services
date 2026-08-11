@@ -29,6 +29,29 @@ function errorResponse(success, error, correlationId) {
   };
 }
 
+function databaseErrorDetails(error) {
+  const cause = error.original || error.parent;
+  if (!cause) return undefined;
+
+  const nestedErrors = Array.isArray(cause.errors)
+    ? cause.errors.map((nestedError) => ({
+      code: nestedError.code,
+      number: nestedError.number,
+      state: nestedError.state,
+      message: nestedError.message,
+    }))
+    : undefined;
+
+  return {
+    name: cause.name,
+    code: cause.code,
+    number: cause.number,
+    state: cause.state,
+    message: cause.message,
+    errors: nestedErrors,
+  };
+}
+
 /**
  * Express error handler middleware
  * Must be registered AFTER all route handlers
@@ -50,6 +73,7 @@ function errorHandlerMiddleware(err, req, res, next) {
     stack: err.stack,
     method: req.method,
     path: req.path,
+    databaseError: databaseErrorDetails(err),
   });
 
   // Determine HTTP status code

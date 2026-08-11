@@ -220,6 +220,7 @@ function mapRequest(request) {
     APPROVED_RATING: approvedRating,
     APPROVED_LIMIT: approvedLimit,
     APPROVED_TERM: approvedTerm,
+    STATUS_ID: request.STATUS_ID || '',
     STATUS: request.status?.NAME || '',
     REQUESTED_NAME: employeeName(request.requestedByEmployee),
     UPDATED_NAME: employeeName(request.updatedByEmployee),

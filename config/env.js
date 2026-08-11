@@ -46,7 +46,25 @@ const envSchema = Joi.object()
     // Logging Configuration
     LOG_LEVEL: Joi.string().valid('debug', 'info', 'warn', 'error').required(),
     LOG_FORMAT: Joi.string().valid('json', 'text').required(),
-    LOG_DIRECTORY: Joi.string().required(),
+
+    // Attachment Storage Configuration
+    ATTACHMENT_STORAGE_DIRECTORY: Joi.string().required(),
+    ATTACHMENT_PUBLIC_BASE_URL: Joi.string().uri().required(),
+    ATTACHMENT_MAX_FILE_SIZE: Joi.number().integer().positive().required(),
+    DEFAULT_ATTACHMENT_TYPE_ID: Joi.string().guid().required(),
+    ATTACHMENT_STORAGE_PROVIDER: Joi.string().valid('FILE_SHARE', 'SHAREPOINT').default('FILE_SHARE'),
+    GRAPH_CLIENT_ID: Joi.string().guid().when('ATTACHMENT_STORAGE_PROVIDER', {
+      is: 'SHAREPOINT', then: Joi.required(), otherwise: Joi.optional(),
+    }),
+    GRAPH_CLIENT_SECRET: Joi.string().when('ATTACHMENT_STORAGE_PROVIDER', {
+      is: 'SHAREPOINT', then: Joi.required(), otherwise: Joi.optional(),
+    }),
+    GRAPH_DRIVE_ID: Joi.string().when('ATTACHMENT_STORAGE_PROVIDER', {
+      is: 'SHAREPOINT', then: Joi.required(), otherwise: Joi.optional(),
+    }),
+    GRAPH_ROOT_FOLDER_ID: Joi.string().when('ATTACHMENT_STORAGE_PROVIDER', {
+      is: 'SHAREPOINT', then: Joi.required(), otherwise: Joi.optional(),
+    }),
     
     // HTTPS Configuration
     KEY_PATH: Joi.string().required(),
@@ -169,7 +187,23 @@ module.exports = {
   logging: {
     level: config.LOG_LEVEL,
     format: config.LOG_FORMAT,
-    directory: config.LOG_DIRECTORY,
+  },
+
+  // Attachments
+  attachments: {
+    storageDirectory: config.ATTACHMENT_STORAGE_DIRECTORY,
+    publicBaseUrl: config.ATTACHMENT_PUBLIC_BASE_URL.replace(/\/$/, ''),
+    maxFileSize: config.ATTACHMENT_MAX_FILE_SIZE,
+    defaultTypeId: config.DEFAULT_ATTACHMENT_TYPE_ID,
+    storageProvider: config.ATTACHMENT_STORAGE_PROVIDER,
+    graph: {
+      clientId: config.GRAPH_CLIENT_ID,
+      clientSecret: config.GRAPH_CLIENT_SECRET,
+      tenantId: config.MSAL_TENANT_ID,
+      endpoint: config.MSAL_GRAPH_ENDPOINT.replace(/\/$/, ''),
+      driveId: config.GRAPH_DRIVE_ID,
+      rootFolderId: config.GRAPH_ROOT_FOLDER_ID,
+    },
   },
   
   // HTTPS

@@ -1,6 +1,7 @@
 const { Sequelize } = require('sequelize');
 const config = require('./env');
 const logger = require('./logger');
+const { resetModels } = require('../models');
 
 /**
  * Database Configuration Module
@@ -60,7 +61,7 @@ async function initializeDatabase() {
   } catch (error) {
     logger.error(`Database connection failed: ${error.message}`);
     throw new Error(
-      `Failed to connect to database. Check your configuration and ensure the database is accessible.`
+      'Failed to connect to database. Check your configuration and ensure the database is accessible.',
     );
   }
 
@@ -88,8 +89,9 @@ async function closeDatabase() {
 
   try {
     await sequelize.close();
-    logger.info('Database connection closed');
     sequelize = null;
+    resetModels();
+    logger.info('Database connection closed');
   } catch (error) {
     logger.error(`Error closing database connection: ${error.message}`);
   }
