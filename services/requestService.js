@@ -62,6 +62,20 @@ function nonBlankName(modelAlias) {
 function buildWhere(query) {
   const conditions = [{ ENABLED: '1' }];
 
+  const search = typeof query.search === 'string' ? query.search.trim() : '';
+  if (search) {
+    const searchPattern = `%${search}%`;
+    conditions.push({
+      [Op.or]: [
+        { NO: { [Op.like]: searchPattern } },
+        { SOLD_TO: { [Op.like]: searchPattern } },
+        { CRM_NO: { [Op.like]: searchPattern } },
+        { CUSTOMER_NAME_TH: { [Op.like]: searchPattern } },
+        { CUSTOMER_NAME_ENG: { [Op.like]: searchPattern } },
+      ],
+    });
+  }
+
   Object.entries(TEXT_FILTERS).forEach(([queryKey, column]) => {
     const value = typeof query[queryKey] === 'string' ? query[queryKey].trim() : '';
     if (value) {
