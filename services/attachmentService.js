@@ -40,6 +40,8 @@ function mapAttachment(attachment) {
   return {
     id: record.ID,
     originalName: record.ORI_NAME,
+    fileSize: Number(record.FILE_SIZE) || 0,
+    mimeType: record.MIME_TYPE || '',
     fileUrl: `${config.appBaseUrl}/${config.environment}/api/requests/${encodeURIComponent(record.REQUEST_ID)}/attachments/${encodeURIComponent(record.ID)}/download`,
     description: record.DESCRIPTION,
     attachmentTypeId: record.ATTACHMENT_TYPE_ID,
@@ -62,6 +64,8 @@ function attachmentAttributes() {
     'ID',
     'ORI_NAME',
     'FILE_NAME',
+    'FILE_SIZE',
+    'MIME_TYPE',
     'DESCRIPTION',
     'ATTACHMENT_TYPE_ID',
     'REQUEST_ID',
@@ -69,7 +73,7 @@ function attachmentAttributes() {
   ];
 
   if (config.attachments.storageProvider === 'SHAREPOINT') {
-    attributes.push('STORAGE_PROVIDER', 'STORAGE_ITEM_ID', 'STORAGE_DRIVE_ID', 'MIME_TYPE');
+    attributes.push('STORAGE_PROVIDER', 'STORAGE_ITEM_ID', 'STORAGE_DRIVE_ID');
   }
 
   return attributes;
