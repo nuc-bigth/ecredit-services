@@ -25,6 +25,7 @@ const TEXT_FILTERS = {
   CRM_NO: 'CRM_NO',
   SUBJECT: 'DESCRIPTION',
   SOLD_TO: 'SOLD_TO',
+  CUSTOMER_TAX_NO: 'CUSTOMER_TAX_NO',
   SEARCH_TERM: 'SEARCH_TERM',
 };
 
@@ -62,6 +63,15 @@ function nonBlankName(modelAlias) {
 function buildWhere(query) {
   const conditions = [{ ENABLED: '1' }];
 
+  const relatedCustomerNo = typeof query.relatedCustomerNo === 'string' ? query.relatedCustomerNo.trim() : '';
+  const relatedTaxId = typeof query.relatedTaxId === 'string' ? query.relatedTaxId.trim() : '';
+  const relatedCustomerConditions = [];
+  if (relatedCustomerNo) relatedCustomerConditions.push({ SOLD_TO: relatedCustomerNo });
+  if (relatedTaxId) relatedCustomerConditions.push({ CUSTOMER_TAX_NO: relatedTaxId });
+  if (relatedCustomerConditions.length) {
+    conditions.push({ [Op.or]: relatedCustomerConditions });
+  }
+
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
     const searchPattern = `%${search}%`;
@@ -72,6 +82,7 @@ function buildWhere(query) {
         { CRM_NO: { [Op.like]: searchPattern } },
         { CUSTOMER_NAME_TH: { [Op.like]: searchPattern } },
         { CUSTOMER_NAME_ENG: { [Op.like]: searchPattern } },
+        { CUSTOMER_TAX_NO: { [Op.like]: searchPattern } },
       ],
     });
   }
@@ -151,6 +162,7 @@ function buildIncludes(models) {
   const { Rating, Term, Status, Employee } = models;
 
   return [
+    { model: Rating, as: 'existingRating', required: false },
     { model: Rating, as: 'requestedRating', required: false },
     { model: Rating, as: 'approvedRating', required: false },
     { model: Term, as: 'requestedTerm', required: false },
@@ -211,6 +223,7 @@ function formatUpdatedDate(value) {
 }
 
 function mapRequest(request, customer) {
+  const existingRating = request.existingRating?.NAME || '';
   const requestedRating = request.requestedRating?.NAME || '';
   const approvedRating = request.approvedRating?.NAME || '';
   const requestedTerm = request.requestedTerm?.NAME || '';
@@ -228,11 +241,16 @@ function mapRequest(request, customer) {
     CRM_NO: request.CRM_NO || '',
     SUBJECT: request.DESCRIPTION || '',
     SOLD_TO: request.SOLD_TO || '',
+    CUSTOMER_TAX_NO: request.CUSTOMER_TAX_NO || '',
     SEARCH_TERM: request.SEARCH_TERM || '',
+    EXISTING_RATING_ID: request.EXISTING_RATING_ID || '',
+    EXISTING_RATING: existingRating,
     REQUESTED_RATING_ID: request.REQUESTED_RATING_ID || '',
     REQUESTED_RATING: requestedRating,
     REQUESTED_LIMIT: requestedLimit,
     REQUESTED_TERM: requestedTerm,
+    PROPOSED_VALID_FROM: request.PROPOSED_VALID_FROM || null,
+    PROPOSED_VALID_TO: request.PROPOSED_VALID_TO || null,
     APPROVED_RATING: approvedRating,
     APPROVED_LIMIT: approvedLimit,
     APPROVED_TERM: approvedTerm,
@@ -246,6 +264,8 @@ function mapRequest(request, customer) {
     IS_RATING_REQUESTED: isNonBlank(requestedRating) ? 1 : 0,
     IS_LIMIT_REQUESTED: requestedLimit !== 0 ? 1 : 0,
     IS_TERM_REQUESTED: isNonBlank(requestedTerm) ? 1 : 0,
+    IS_PERMANENT_PROPOSED: Boolean(request.IS_PERMANENT_PROPOSED),
+    IS_TEMPORARY_PROPOSED: Boolean(request.IS_TEMPORARY_PROPOSED),
     IS_RATING_APPROVED: isNonBlank(approvedRating) ? 1 : 0,
     IS_LIMIT_APPROVED: approvedLimit !== 0 ? 1 : 0,
     IS_TERM_APPROVED: isNonBlank(approvedTerm) ? 1 : 0,
@@ -271,9 +291,11 @@ async function findCustomerDetails(crmNo) {
       SC.ADDRESS_ENG_FAX AS faxId,
       SC.ADDRESS_ENG AS address
     FROM S_CUSTOMER SC
-    INNER JOIN CUSTOMERS C ON C.TAX_NO = SC.TAX_NO AND C.ENABLED = '1'
+    INNER JOIN CUSTOMERS C
+      ON C.TAX_NO COLLATE DATABASE_DEFAULT = SC.TAX_NO COLLATE DATABASE_DEFAULT
+      AND C.ENABLED = '1'
     LEFT JOIN SIZES S ON S.ID = C.SIZE_ID
-    WHERE SC.CUST_NO = :crmNo
+    WHERE SC.CUST_NO COLLATE DATABASE_DEFAULT = :crmNo COLLATE DATABASE_DEFAULT
     ORDER BY C.UPDATED_DATE DESC`,
     { replacements: { crmNo }, type: QueryTypes.SELECT },
   );

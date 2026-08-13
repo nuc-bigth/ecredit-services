@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const { Op, fn, col, where: sequelizeWhere } = require('sequelize');
 const logger = require('../config/logger');
 const { getModels } = require('../models');
 
@@ -151,6 +152,31 @@ async function listRequestEvents(requestId, query) {
 
   if (Object.values(LOG_TYPE_IDS).includes(query.logTypeId)) {
     where.LOG_TYPE_ID = query.logTypeId;
+  }
+
+  const search = typeof query.search === 'string' ? query.search.trim() : '';
+  if (search.length > 100) {
+    const error = new Error('Event log search must not exceed 100 characters.');
+    error.statusCode = 400;
+    error.code = 'INVALID_INPUT';
+    throw error;
+  }
+  if (search) {
+    const searchPattern = `%${search}%`;
+    const matchingLogTypeIds = Object.entries(LOG_TYPE_IDS)
+      .filter(([label]) => label.includes(search.toLowerCase()))
+      .map(([, id]) => id);
+    const searchConditions = [
+      { NAME: { [Op.like]: searchPattern } },
+      { CATEGORY: { [Op.like]: searchPattern } },
+      { DESCRIPTION: { [Op.like]: searchPattern } },
+      sequelizeWhere(
+        fn('CONCAT', col('updatedByEmployee.INITIALS'), '-', col('updatedByEmployee.USERNAME')),
+        { [Op.like]: searchPattern },
+      ),
+    ];
+    if (matchingLogTypeIds.length) searchConditions.push({ LOG_TYPE_ID: { [Op.in]: matchingLogTypeIds } });
+    where[Op.or] = searchConditions;
   }
 
   const { count, rows } = await Log.findAndCountAll({

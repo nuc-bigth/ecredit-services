@@ -60,6 +60,7 @@ function initModels(sequelize) {
   User.hasMany(UserRole, { as: 'userRoles', foreignKey: 'USER_ID', sourceKey: 'ID' });
   UserRole.belongsTo(Role, { as: 'role', foreignKey: 'ROLE_ID' });
 
+  Request.belongsTo(Rating, { as: 'existingRating', foreignKey: 'EXISTING_RATING_ID' });
   Request.belongsTo(Rating, { as: 'requestedRating', foreignKey: 'REQUESTED_RATING_ID' });
   Request.belongsTo(Rating, { as: 'approvedRating', foreignKey: 'APPROVED_RATING_ID' });
   Request.belongsTo(Term, { as: 'requestedTerm', foreignKey: 'REQUESTED_TERM_ID' });
