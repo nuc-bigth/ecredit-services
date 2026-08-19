@@ -18,6 +18,7 @@ router.post('/:requestId/attachments', authenticationMiddleware, attachmentContr
 router.get('/:requestId/attachments/:attachmentId/download', authenticationMiddleware, attachmentController.downloadAttachment);
 router.delete('/:requestId/attachments/:attachmentId', authenticationMiddleware, attachmentController.deleteAttachment);
 router.get('/:id', authenticationMiddleware, requestController.getRequest);
+router.patch('/:id/customer-info', authenticationMiddleware, requestController.updateRequestCustomerInfo);
 router.patch('/:id/cancel', authenticationMiddleware, requestController.cancelRequest);
 
 module.exports = router;

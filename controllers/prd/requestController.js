@@ -54,6 +54,36 @@ async function getRequest(req, res, next) {
   }
 }
 
+async function updateRequestCustomerInfo(req, res, next) {
+  try {
+    const correlationId = res.locals.correlationId || 'N/A';
+    const updatedBy = Number(req.user?.profile?.CODE);
+    if (!Number.isInteger(updatedBy)) {
+      const error = new Error('Authenticated user profile is missing a numeric employee code.');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    const request = await requestService.updateRequestCustomerInfo(req.params.id, req.body, updatedBy);
+    if (!request) {
+      const error = new Error(`Request ${req.params.id} was not found.`);
+      error.statusCode = 404;
+      error.code = 'RESOURCE_NOT_FOUND';
+      throw error;
+    }
+
+    res.status(200).json({ success: true, data: request, correlationId });
+  } catch (error) {
+    logger.error(`Error in updateRequestCustomerInfo: ${error.message}`, {
+      correlationId: res.locals.correlationId,
+      route: { method: req.method, path: req.path },
+      stack: error.stack,
+    });
+    next(error);
+  }
+}
+
 async function cancelRequest(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
@@ -91,4 +121,4 @@ async function cancelRequest(req, res, next) {
   }
 }
 
-module.exports = { listRequests, getRequest, cancelRequest };
+module.exports = { listRequests, getRequest, updateRequestCustomerInfo, cancelRequest };

@@ -1,9 +1,9 @@
-const { Op, fn, col, where, QueryTypes } = require('sequelize');
-const { getDatabase } = require('../config/database');
+const { Op, fn, col, where } = require('sequelize');
 const { getModels } = require('../models');
 
 const QUICK_FILTERS = new Set(['rating', 'limit', 'term']);
 const CANCELLED_STATUS_ID = '31d531f4-0420-4db5-aecf-bcfe4a0e8c4a';
+const COMPLETED_STATUS_ID = '407e23f9-caf5-4c4a-801d-598cf437d1ae';
 const SORT_FIELDS = {
   NO: 'NO',
   CUSTOMER_NAME_TH: 'CUSTOMER_NAME_TH',
@@ -223,7 +223,13 @@ function formatUpdatedDate(value) {
   return `${part('day')} ${part('month')} ${part('year')} ${part('hour')}:${part('minute')} ${part('dayPeriod').toUpperCase()}`;
 }
 
-function mapRequest(request, customer) {
+function formatDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+}
+
+function mapRequest(request) {
   const existingRating = request.existingRating?.NAME || '';
   const requestedRating = request.requestedRating?.NAME || '';
   const approvedRating = request.approvedRating?.NAME || '';
@@ -261,7 +267,16 @@ function mapRequest(request, customer) {
     UPDATED_NAME: employeeName(request.updatedByEmployee),
     CREATED_DATE: formatUpdatedDate(request.CREATED_DATE),
     UPDATED_DATE: formatUpdatedDate(request.UPDATED_DATE),
-    CUSTOMER: customer || null,
+    CUSTOMER_PHONE: request.CUSTOMER_PHONE || '',
+    CUSTOMER_FAX: request.CUSTOMER_FAX || '',
+    CUSTOMER_REGISTERED_DATE: formatDate(request.CUSTOMER_REGISTERED_DATE),
+    CUSTOMER_REGISTERED_CAPITAL_AMOUNT: toNumber(request.CUSTOMER_REGISTERED_CAPITAL_AMOUNT),
+    CUSTOMER_SIZE_ID: request.CUSTOMER_SIZE_ID || '',
+    CUSTOMER_BUSINESS_TYPE_INTER: request.CUSTOMER_BUSINESS_TYPE_INTER || '',
+    CUSTOMER_CUSTOMER_TYPE_INTER: request.CUSTOMER_CUSTOMER_TYPE_INTER || '',
+    CUSTOMER_SHAREHOLDERS: request.CUSTOMER_SHAREHOLDERS || '',
+    CUSTOMER_DIRECTORS: request.CUSTOMER_DIRECTORS || '',
+    CUSTOMER_ADDRESS: request.CUSTOMER_ADDRESS || '',
     IS_RATING_REQUESTED: isNonBlank(requestedRating) ? 1 : 0,
     IS_LIMIT_REQUESTED: requestedLimit !== 0 ? 1 : 0,
     IS_TERM_REQUESTED: isNonBlank(requestedTerm) ? 1 : 0,
@@ -271,37 +286,6 @@ function mapRequest(request, customer) {
     IS_LIMIT_APPROVED: approvedLimit !== 0 ? 1 : 0,
     IS_TERM_APPROVED: isNonBlank(approvedTerm) ? 1 : 0,
   };
-}
-
-async function findCustomerDetails(crmNo) {
-  if (!isNonBlank(crmNo)) return null;
-
-  const [customers] = await getDatabase().query(
-    `SELECT TOP (1)
-      C.ID AS id,
-      C.TAX_NO AS taxNo,
-      CONVERT(char(10), C.REGISTERED_DATE, 23) AS registeredDate,
-      C.REGISTERED_CAPITAL_AMOUNT AS registeredCapitalAmount,
-      C.SIZE_ID AS sizeId,
-      S.NAME AS sizeName,
-      C.BUSINESS_TYPE_INTER AS businessType,
-      C.CUSTOMER_TYPE_INTER AS customerType,
-      C.DIRECTORS AS directors,
-      C.SHAREHOLDERS AS shareholders,
-      SC.ADDRESS_ENG_TELEPHONE AS phone,
-      SC.ADDRESS_ENG_FAX AS faxId,
-      SC.ADDRESS_ENG AS address
-    FROM S_CUSTOMER SC
-    INNER JOIN CUSTOMERS C
-      ON C.TAX_NO COLLATE DATABASE_DEFAULT = SC.TAX_NO COLLATE DATABASE_DEFAULT
-      AND C.ENABLED = '1'
-    LEFT JOIN SIZES S ON S.ID = C.SIZE_ID
-    WHERE SC.CUST_NO COLLATE DATABASE_DEFAULT = :crmNo COLLATE DATABASE_DEFAULT
-    ORDER BY C.UPDATED_DATE DESC`,
-    { replacements: { crmNo }, type: QueryTypes.SELECT },
-  );
-
-  return customers || null;
 }
 
 function buildOrder(sort, dir) {
@@ -353,8 +337,81 @@ async function getRequestById(id) {
 
   if (!request) return null;
 
-  const customer = await findCustomerDetails(request.CRM_NO);
-  return mapRequest(request, customer);
+  return mapRequest(request);
+}
+
+function validationError(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  error.code = 'VALIDATION_ERROR';
+  return error;
+}
+
+function normalizeRequestCustomerInfo(payload) {
+  const fields = [
+    'CUSTOMER_TAX_NO',
+    'CUSTOMER_REGISTERED_DATE',
+    'CUSTOMER_REGISTERED_CAPITAL_AMOUNT',
+    'CUSTOMER_SIZE_ID',
+    'CUSTOMER_BUSINESS_TYPE_INTER',
+    'CUSTOMER_CUSTOMER_TYPE_INTER',
+    'CUSTOMER_DIRECTORS',
+    'CUSTOMER_SHAREHOLDERS',
+  ];
+  const update = {};
+
+  fields.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(payload, field)) update[field] = payload[field];
+  });
+
+  if (!Object.keys(update).length) throw validationError('No request customer fields were supplied.');
+  if (typeof update.CUSTOMER_TAX_NO === 'string' && update.CUSTOMER_TAX_NO.length > 13) {
+    throw validationError('CUSTOMER_TAX_NO must not exceed 13 characters.');
+  }
+  if (typeof update.CUSTOMER_SIZE_ID === 'string' && update.CUSTOMER_SIZE_ID.length > 128) {
+    throw validationError('CUSTOMER_SIZE_ID must not exceed 128 characters.');
+  }
+  ['CUSTOMER_BUSINESS_TYPE_INTER', 'CUSTOMER_CUSTOMER_TYPE_INTER', 'CUSTOMER_DIRECTORS', 'CUSTOMER_SHAREHOLDERS'].forEach((field) => {
+    if (typeof update[field] === 'string' && update[field].length > 2048) {
+      throw validationError(`${field} must not exceed 2048 characters.`);
+    }
+  });
+  if (update.CUSTOMER_REGISTERED_DATE !== undefined && update.CUSTOMER_REGISTERED_DATE !== null && update.CUSTOMER_REGISTERED_DATE !== ''
+    && !/^\d{4}-\d{2}-\d{2}$/.test(update.CUSTOMER_REGISTERED_DATE)) {
+    throw validationError('CUSTOMER_REGISTERED_DATE must use YYYY-MM-DD.');
+  }
+  if (update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT !== undefined
+    && update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT !== null
+    && update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT !== '') {
+    const capitalAmount = Number(update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT);
+    if (!Number.isFinite(capitalAmount) || !/^\d+(\.\d{1,4})?$/.test(String(update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT))) {
+      throw validationError('CUSTOMER_REGISTERED_CAPITAL_AMOUNT must be a decimal with up to 4 decimal places.');
+    }
+    update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT = capitalAmount;
+  }
+
+  return update;
+}
+
+async function updateRequestCustomerInfo(id, payload, updatedBy) {
+  const { Request, Size } = getModels();
+  const update = normalizeRequestCustomerInfo(payload);
+  const request = await Request.findOne({ where: { ID: id, ENABLED: '1' } });
+
+  if (!request) return null;
+  if (request.STATUS_ID === CANCELLED_STATUS_ID || request.STATUS_ID === COMPLETED_STATUS_ID) {
+    const error = new Error('Customer information cannot be edited after this request is cancelled or completed.');
+    error.statusCode = 409;
+    error.code = 'REQUEST_NOT_EDITABLE';
+    throw error;
+  }
+  if (update.CUSTOMER_SIZE_ID) {
+    const size = await Size.findOne({ where: { ID: update.CUSTOMER_SIZE_ID, ENABLED: '1' } });
+    if (!size) throw validationError('CUSTOMER_SIZE_ID must reference an enabled size.');
+  }
+
+  await request.update({ ...update, UPDATED_DATE: new Date(), UPDATED_BY: updatedBy });
+  return getRequestById(id);
 }
 
 async function cancelRequest(id, updatedBy) {
@@ -375,5 +432,6 @@ async function cancelRequest(id, updatedBy) {
 module.exports = {
   listRequests,
   getRequestById,
+  updateRequestCustomerInfo,
   cancelRequest,
 };
