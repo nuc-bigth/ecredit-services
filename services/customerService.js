@@ -20,7 +20,7 @@ const TEXT_FILTERS = {
   BUSINESS_TYPE: 'BUSINESS_TYPE_INTER',
 };
 
-// Mirrors the OUTER APPLY: shortest, then alphabetically-first S_CUSTOMER name for the same tax no.
+// Mirrors the OUTER APPLY: shortest, then alphabetically-first S_CUSTOMER name for the same tax id.
 const CUSTOMER_NAME_SUBQUERY = `(
   SELECT TOP (1) SC.CUST_NAME_ENG
   FROM S_CUSTOMER SC

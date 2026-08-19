@@ -54,20 +54,20 @@ async function getRequest(req, res, next) {
   }
 }
 
-async function deleteRequest(req, res, next) {
+async function cancelRequest(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = req.user?.profile?.CODE;
-    if (!updatedBy) {
-      const error = new Error('Authenticated user profile is missing an employee code.');
+    const updatedBy = Number(req.user?.profile?.CODE);
+    if (!Number.isInteger(updatedBy)) {
+      const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;
       error.code = 'FORBIDDEN';
       throw error;
     }
 
-    const deleted = await requestService.softDeleteRequest(req.params.id, updatedBy);
+    const cancelled = await requestService.cancelRequest(req.params.id, updatedBy);
 
-    if (!deleted) {
+    if (!cancelled) {
       const error = new Error(`Request ${req.params.id} was not found.`);
       error.statusCode = 404;
       error.code = 'RESOURCE_NOT_FOUND';
@@ -76,13 +76,13 @@ async function deleteRequest(req, res, next) {
 
     res.status(200).json({ success: true, data: { id: req.params.id }, correlationId });
 
-    logger.debug('Request soft deleted', {
+    logger.debug('Request cancelled', {
       correlationId,
       route: { method: req.method, path: req.path },
       payload: { id: req.params.id, updatedBy },
     });
   } catch (error) {
-    logger.error(`Error in deleteRequest: ${error.message}`, {
+    logger.error(`Error in cancelRequest: ${error.message}`, {
       correlationId: res.locals.correlationId,
       route: { method: req.method, path: req.path },
       stack: error.stack,
@@ -91,4 +91,4 @@ async function deleteRequest(req, res, next) {
   }
 }
 
-module.exports = { listRequests, getRequest, deleteRequest };
+module.exports = { listRequests, getRequest, cancelRequest };

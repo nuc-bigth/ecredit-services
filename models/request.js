@@ -31,7 +31,7 @@ module.exports = (sequelize) =>
       STATUS_ID: DataTypes.STRING,
       REQUESTED_BY: DataTypes.STRING,
       CREATED_DATE: DataTypes.DATE,
-      UPDATED_BY: DataTypes.STRING,
+      UPDATED_BY: DataTypes.INTEGER,
       UPDATED_DATE: DataTypes.DATE,
       ENABLED: DataTypes.STRING,
     },

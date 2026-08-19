@@ -3,6 +3,7 @@ const { getDatabase } = require('../config/database');
 const { getModels } = require('../models');
 
 const QUICK_FILTERS = new Set(['rating', 'limit', 'term']);
+const CANCELLED_STATUS_ID = '31d531f4-0420-4db5-aecf-bcfe4a0e8c4a';
 const SORT_FIELDS = {
   NO: 'NO',
   CUSTOMER_NAME_TH: 'CUSTOMER_NAME_TH',
@@ -356,12 +357,13 @@ async function getRequestById(id) {
   return mapRequest(request, customer);
 }
 
-async function softDeleteRequest(id, updatedBy) {
+async function cancelRequest(id, updatedBy) {
   const { Request } = getModels();
+
   const [affectedRows] = await Request.update(
     {
-      ENABLED: '0',
-      UPDATED_DATE: new Date(),
+      STATUS_ID: CANCELLED_STATUS_ID,
+      UPDATED_DATE: Request.sequelize.fn('GETDATE'),
       UPDATED_BY: updatedBy,
     },
     { where: { ID: id, ENABLED: '1' } },
@@ -373,5 +375,5 @@ async function softDeleteRequest(id, updatedBy) {
 module.exports = {
   listRequests,
   getRequestById,
-  softDeleteRequest,
+  cancelRequest,
 };
