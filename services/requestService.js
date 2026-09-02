@@ -171,10 +171,10 @@ function buildIncludes(models) {
   return [
     { model: Rating, as: 'existingRating', required: false },
     { model: Rating, as: 'requestedRating', required: false },
-    { model: Rating, as: 'suggestedRating', required: false },
+    { model: Rating, as: 'proposedRating', required: false },
     { model: Rating, as: 'approvedRating', required: false },
     { model: Term, as: 'requestedTerm', required: false },
-    { model: Term, as: 'suggestedTerm', required: false },
+    { model: Term, as: 'proposedTerm', required: false },
     { model: Term, as: 'approvedTerm', required: false },
     { model: Status, as: 'status', required: false },
     { model: Employee, as: 'requestedByEmployee', required: false },
@@ -246,15 +246,15 @@ function customerSizeIdForCapital(capitalAmount) {
 function mapRequest(request) {
   const existingRating = request.existingRating?.NAME || '';
   const requestedRating = request.requestedRating?.NAME || '';
-  const suggestedRating = request.suggestedRating?.NAME || '';
+  const proposedRating = request.proposedRating?.NAME || '';
   const approvedRating = request.approvedRating?.NAME || '';
   const requestedTerm = request.requestedTerm?.NAME || '';
-  const suggestedTerm = request.suggestedTerm?.NAME || '';
+  const proposedTerm = request.proposedTerm?.NAME || '';
   const approvedTerm = request.approvedTerm?.NAME || '';
   const requestedLimit = toNumber(request.REQUESTED_LIMIT_AMOUNT);
-  const suggestedLimit = request.SUGGESTED_LIMIT_AMOUNT === null || request.SUGGESTED_LIMIT_AMOUNT === undefined
+  const proposedLimit = request.PROPOSED_LIMIT_AMOUNT === null || request.PROPOSED_LIMIT_AMOUNT === undefined
     ? null
-    : toNumber(request.SUGGESTED_LIMIT_AMOUNT);
+    : toNumber(request.PROPOSED_LIMIT_AMOUNT);
   const approvedLimit = toNumber(request.APPROVED_LIMIT_AMOUNT);
 
   return {
@@ -273,13 +273,13 @@ function mapRequest(request) {
     EXISTING_RATING: existingRating,
     REQUESTED_RATING_ID: request.REQUESTED_RATING_ID || '',
     REQUESTED_RATING: requestedRating,
-    SUGGESTED_RATING_ID: request.SUGGESTED_RATING_ID || '',
-    SUGGESTED_RATING: suggestedRating,
+    PROPOSED_RATING_ID: request.PROPOSED_RATING_ID || '',
+    PROPOSED_RATING: proposedRating,
     REQUESTED_LIMIT: requestedLimit,
-    SUGGESTED_LIMIT: suggestedLimit,
+    PROPOSED_LIMIT: proposedLimit,
     REQUESTED_TERM: requestedTerm,
-    SUGGESTED_TERM_ID: request.SUGGESTED_TERM_ID || '',
-    SUGGESTED_TERM: suggestedTerm,
+    PROPOSED_TERM_ID: request.PROPOSED_TERM_ID || '',
+    PROPOSED_TERM: proposedTerm,
     PROPOSED_VALID_FROM: request.PROPOSED_VALID_FROM || null,
     PROPOSED_VALID_TO: request.PROPOSED_VALID_TO || null,
     APPROVED_RATING: approvedRating,
@@ -473,7 +473,7 @@ function normalizeCreditSuggestionId(value, field) {
 }
 
 function normalizeRequestCreditSuggestion(payload) {
-  const fields = ['SUGGESTED_TERM_ID', 'SUGGESTED_LIMIT_AMOUNT', 'SUGGESTED_RATING_ID'];
+  const fields = ['PROPOSED_TERM_ID', 'PROPOSED_LIMIT_AMOUNT', 'PROPOSED_RATING_ID'];
   const update = {};
 
   fields.forEach((field) => {
@@ -481,18 +481,18 @@ function normalizeRequestCreditSuggestion(payload) {
   });
 
   if (!Object.keys(update).length) throw validationError('No credit suggestion fields were supplied.');
-  update.SUGGESTED_TERM_ID = normalizeCreditSuggestionId(update.SUGGESTED_TERM_ID, 'SUGGESTED_TERM_ID');
-  update.SUGGESTED_RATING_ID = normalizeCreditSuggestionId(update.SUGGESTED_RATING_ID, 'SUGGESTED_RATING_ID');
+  update.PROPOSED_TERM_ID = normalizeCreditSuggestionId(update.PROPOSED_TERM_ID, 'PROPOSED_TERM_ID');
+  update.PROPOSED_RATING_ID = normalizeCreditSuggestionId(update.PROPOSED_RATING_ID, 'PROPOSED_RATING_ID');
 
-  const limit = update.SUGGESTED_LIMIT_AMOUNT;
+  const limit = update.PROPOSED_LIMIT_AMOUNT;
   if (limit === undefined || limit === null || limit === '') {
-    update.SUGGESTED_LIMIT_AMOUNT = null;
+    update.PROPOSED_LIMIT_AMOUNT = null;
   } else {
     const normalizedLimit = Number(limit);
     if (!Number.isFinite(normalizedLimit) || normalizedLimit < 0) {
-      throw validationError('SUGGESTED_LIMIT_AMOUNT must be a non-negative number.');
+      throw validationError('PROPOSED_LIMIT_AMOUNT must be a non-negative number.');
     }
-    update.SUGGESTED_LIMIT_AMOUNT = normalizedLimit;
+    update.PROPOSED_LIMIT_AMOUNT = normalizedLimit;
   }
 
   return update;
@@ -510,13 +510,13 @@ async function updateRequestCreditSuggestion(id, payload, updatedBy) {
     error.code = 'REQUEST_NOT_EDITABLE';
     throw error;
   }
-  if (update.SUGGESTED_TERM_ID) {
-    const term = await Term.findByPk(update.SUGGESTED_TERM_ID);
-    if (!term) throw validationError('SUGGESTED_TERM_ID must reference a valid term.');
+  if (update.PROPOSED_TERM_ID) {
+    const term = await Term.findByPk(update.PROPOSED_TERM_ID);
+    if (!term) throw validationError('PROPOSED_TERM_ID must reference a valid term.');
   }
-  if (update.SUGGESTED_RATING_ID) {
-    const rating = await Rating.findOne({ where: { ID: update.SUGGESTED_RATING_ID, ENABLED: '1' } });
-    if (!rating) throw validationError('SUGGESTED_RATING_ID must reference an enabled rating.');
+  if (update.PROPOSED_RATING_ID) {
+    const rating = await Rating.findOne({ where: { ID: update.PROPOSED_RATING_ID, ENABLED: '1' } });
+    if (!rating) throw validationError('PROPOSED_RATING_ID must reference an enabled rating.');
   }
 
   await request.update({ ...update, UPDATED_DATE: new Date(), UPDATED_BY: updatedBy });
