@@ -83,6 +83,14 @@ DB_PASSWORD=<actual_password>
 # ... other required variables
 ```
 
+### Registered capital amount
+
+Before deploying the capital-based customer Size calculation, apply
+`database/migrations/20260831_expand_registered_capital_amount.sql` through the SQL Server
+deployment process. It changes `REQUESTS.CUSTOMER_REGISTERED_CAPITAL_AMOUNT` to
+`DECIMAL(38, 0)` so the application can store whole-number capital values without the former
+18-digit limit.
+
 ### SharePoint attachment storage
 
 Attachments use the existing file share by default. Before enabling SharePoint, apply

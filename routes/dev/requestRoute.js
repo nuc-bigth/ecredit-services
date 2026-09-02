@@ -11,6 +11,7 @@ router.get('/', authenticationMiddleware, requestController.listRequests);
 router.get('/statuses', authenticationMiddleware, requestMetadataController.listEnabledStatuses);
 router.get('/log-types', authenticationMiddleware, requestMetadataController.listEnabledLogTypes);
 router.get('/ratings', authenticationMiddleware, requestMetadataController.listEnabledRatings);
+router.get('/terms', authenticationMiddleware, requestMetadataController.listTerms);
 router.get('/:requestId/event-logs', authenticationMiddleware, eventLogController.listRequestEvents);
 router.get('/:requestId/event-logs/:logId', authenticationMiddleware, eventLogController.getRequestEvent);
 router.get('/:requestId/attachments', authenticationMiddleware, attachmentController.listAttachments);
@@ -19,6 +20,7 @@ router.get('/:requestId/attachments/:attachmentId/download', authenticationMiddl
 router.delete('/:requestId/attachments/:attachmentId', authenticationMiddleware, attachmentController.deleteAttachment);
 router.get('/:id', authenticationMiddleware, requestController.getRequest);
 router.patch('/:id/customer-info', authenticationMiddleware, requestController.updateRequestCustomerInfo);
+router.patch('/:id/credit-suggestion', authenticationMiddleware, requestController.updateRequestCreditSuggestion);
 router.patch('/:id/cancel', authenticationMiddleware, requestController.cancelRequest);
 
 module.exports = router;

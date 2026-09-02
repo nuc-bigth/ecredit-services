@@ -30,4 +30,14 @@ async function listEnabledRatings(req, res, next) {
   }
 }
 
-module.exports = { listEnabledLogTypes, listEnabledRatings, listEnabledStatuses };
+async function listTerms(req, res, next) {
+  try {
+    const data = await requestMetadataService.listTerms();
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.status(200).json({ success: true, data, correlationId: res.locals.correlationId || 'N/A' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { listEnabledLogTypes, listEnabledRatings, listEnabledStatuses, listTerms };

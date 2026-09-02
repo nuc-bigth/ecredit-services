@@ -62,8 +62,10 @@ function initModels(sequelize) {
 
   Request.belongsTo(Rating, { as: 'existingRating', foreignKey: 'EXISTING_RATING_ID' });
   Request.belongsTo(Rating, { as: 'requestedRating', foreignKey: 'REQUESTED_RATING_ID' });
+  Request.belongsTo(Rating, { as: 'suggestedRating', foreignKey: 'SUGGESTED_RATING_ID' });
   Request.belongsTo(Rating, { as: 'approvedRating', foreignKey: 'APPROVED_RATING_ID' });
   Request.belongsTo(Term, { as: 'requestedTerm', foreignKey: 'REQUESTED_TERM_ID' });
+  Request.belongsTo(Term, { as: 'suggestedTerm', foreignKey: 'SUGGESTED_TERM_ID' });
   Request.belongsTo(Term, { as: 'approvedTerm', foreignKey: 'APPROVED_TERM_ID' });
   Request.belongsTo(Status, { as: 'status', foreignKey: 'STATUS_ID' });
   Request.belongsTo(Employee, { as: 'requestedByEmployee', foreignKey: 'REQUESTED_BY', targetKey: 'EMP_CODE' });

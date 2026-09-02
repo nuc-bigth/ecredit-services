@@ -1,9 +1,15 @@
-const { Op, fn, col, where } = require('sequelize');
+const { Op, QueryTypes, fn, col, where } = require('sequelize');
 const { getModels } = require('../models');
+const { getDatabase } = require('../config/database');
 
 const QUICK_FILTERS = new Set(['rating', 'limit', 'term']);
 const CANCELLED_STATUS_ID = '31d531f4-0420-4db5-aecf-bcfe4a0e8c4a';
 const COMPLETED_STATUS_ID = '407e23f9-caf5-4c4a-801d-598cf437d1ae';
+const SMALL_CUSTOMER_SIZE_ID = 'd8ce72cf-0228-4293-9699-311eeecb926d';
+const MEDIUM_CUSTOMER_SIZE_ID = '9d9d84c7-8926-4629-b06f-2cb4d434fc33';
+const LARGE_CUSTOMER_SIZE_ID = '4b2d23db-96d6-4cef-b6ae-10a97a8ce1cb';
+const MEDIUM_CUSTOMER_CAPITAL_MINIMUM = 50000000n;
+const LARGE_CUSTOMER_CAPITAL_MINIMUM = 200000000n;
 const SORT_FIELDS = {
   NO: 'NO',
   CUSTOMER_NAME_TH: 'CUSTOMER_NAME_TH',
@@ -165,8 +171,10 @@ function buildIncludes(models) {
   return [
     { model: Rating, as: 'existingRating', required: false },
     { model: Rating, as: 'requestedRating', required: false },
+    { model: Rating, as: 'suggestedRating', required: false },
     { model: Rating, as: 'approvedRating', required: false },
     { model: Term, as: 'requestedTerm', required: false },
+    { model: Term, as: 'suggestedTerm', required: false },
     { model: Term, as: 'approvedTerm', required: false },
     { model: Status, as: 'status', required: false },
     { model: Employee, as: 'requestedByEmployee', required: false },
@@ -229,13 +237,24 @@ function formatDate(value) {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
 }
 
+function customerSizeIdForCapital(capitalAmount) {
+  if (capitalAmount < MEDIUM_CUSTOMER_CAPITAL_MINIMUM) return SMALL_CUSTOMER_SIZE_ID;
+  if (capitalAmount <= LARGE_CUSTOMER_CAPITAL_MINIMUM) return MEDIUM_CUSTOMER_SIZE_ID;
+  return LARGE_CUSTOMER_SIZE_ID;
+}
+
 function mapRequest(request) {
   const existingRating = request.existingRating?.NAME || '';
   const requestedRating = request.requestedRating?.NAME || '';
+  const suggestedRating = request.suggestedRating?.NAME || '';
   const approvedRating = request.approvedRating?.NAME || '';
   const requestedTerm = request.requestedTerm?.NAME || '';
+  const suggestedTerm = request.suggestedTerm?.NAME || '';
   const approvedTerm = request.approvedTerm?.NAME || '';
   const requestedLimit = toNumber(request.REQUESTED_LIMIT_AMOUNT);
+  const suggestedLimit = request.SUGGESTED_LIMIT_AMOUNT === null || request.SUGGESTED_LIMIT_AMOUNT === undefined
+    ? null
+    : toNumber(request.SUGGESTED_LIMIT_AMOUNT);
   const approvedLimit = toNumber(request.APPROVED_LIMIT_AMOUNT);
 
   return {
@@ -254,8 +273,13 @@ function mapRequest(request) {
     EXISTING_RATING: existingRating,
     REQUESTED_RATING_ID: request.REQUESTED_RATING_ID || '',
     REQUESTED_RATING: requestedRating,
+    SUGGESTED_RATING_ID: request.SUGGESTED_RATING_ID || '',
+    SUGGESTED_RATING: suggestedRating,
     REQUESTED_LIMIT: requestedLimit,
+    SUGGESTED_LIMIT: suggestedLimit,
     REQUESTED_TERM: requestedTerm,
+    SUGGESTED_TERM_ID: request.SUGGESTED_TERM_ID || '',
+    SUGGESTED_TERM: suggestedTerm,
     PROPOSED_VALID_FROM: request.PROPOSED_VALID_FROM || null,
     PROPOSED_VALID_TO: request.PROPOSED_VALID_TO || null,
     APPROVED_RATING: approvedRating,
@@ -270,8 +294,8 @@ function mapRequest(request) {
     CUSTOMER_PHONE: request.CUSTOMER_PHONE || '',
     CUSTOMER_FAX: request.CUSTOMER_FAX || '',
     CUSTOMER_REGISTERED_DATE: formatDate(request.CUSTOMER_REGISTERED_DATE),
-    CUSTOMER_REGISTERED_CAPITAL_AMOUNT: toNumber(request.CUSTOMER_REGISTERED_CAPITAL_AMOUNT),
-    CUSTOMER_SIZE_ID: request.CUSTOMER_SIZE_ID || '',
+    CUSTOMER_REGISTERED_CAPITAL_AMOUNT: request.CUSTOMER_REGISTERED_CAPITAL_AMOUNT?.toString() || '0',
+    CUSTOMER_SIZE_ID: customerSizeIdForCapital(BigInt(request.CUSTOMER_REGISTERED_CAPITAL_AMOUNT?.toString() || '0')),
     CUSTOMER_BUSINESS_TYPE_INTER: request.CUSTOMER_BUSINESS_TYPE_INTER || '',
     CUSTOMER_CUSTOMER_TYPE_INTER: request.CUSTOMER_CUSTOMER_TYPE_INTER || '',
     CUSTOMER_SHAREHOLDERS: request.CUSTOMER_SHAREHOLDERS || '',
@@ -286,6 +310,35 @@ function mapRequest(request) {
     IS_LIMIT_APPROVED: approvedLimit !== 0 ? 1 : 0,
     IS_TERM_APPROVED: isNonBlank(approvedTerm) ? 1 : 0,
   };
+}
+
+function formatCompanyCode(company) {
+  const companyCode = company?.COMP_CODE?.trim() || '';
+  const description = company?.DESCRIPTION?.trim() || '';
+
+  if (!companyCode) return description;
+  if (!description) return companyCode;
+  return `${companyCode} - ${description}`;
+}
+
+async function getCompanyCode(soldTo) {
+  if (!isNonBlank(soldTo)) return '';
+
+  const companies = await getDatabase().query(
+    `SELECT DISTINCT
+      TB3.COMP_CODE,
+      TB3.DESCRIPTION
+    FROM [MDCENTER_PRD].[dbo].[CUSTOMER] AS TB2
+    LEFT JOIN [MDCENTER_PRD].[dbo].[COMPANYMASTER] AS TB3
+      ON TB2.SALES_ORG = TB3.COMP_CODE
+    WHERE :soldTo COLLATE Thai_CI_AI = TB2.CUST_NO`,
+    {
+      replacements: { soldTo: soldTo.trim() },
+      type: QueryTypes.SELECT,
+    },
+  );
+
+  return formatCompanyCode(companies[0]);
 }
 
 function buildOrder(sort, dir) {
@@ -337,7 +390,9 @@ async function getRequestById(id) {
 
   if (!request) return null;
 
-  return mapRequest(request);
+  const response = mapRequest(request);
+  response.COMPANY_CODE = await getCompanyCode(response.SOLD_TO);
+  return response;
 }
 
 function validationError(message) {
@@ -368,27 +423,24 @@ function normalizeRequestCustomerInfo(payload) {
   if (typeof update.CUSTOMER_TAX_NO === 'string' && update.CUSTOMER_TAX_NO.length > 13) {
     throw validationError('CUSTOMER_TAX_NO must not exceed 13 characters.');
   }
-  if (typeof update.CUSTOMER_SIZE_ID === 'string' && update.CUSTOMER_SIZE_ID.length > 128) {
-    throw validationError('CUSTOMER_SIZE_ID must not exceed 128 characters.');
+  if (typeof update.CUSTOMER_TAX_NO === 'string'
+    && update.CUSTOMER_TAX_NO !== ''
+    && !/^\d{13}$/.test(update.CUSTOMER_TAX_NO)) {
+    throw validationError('CUSTOMER_TAX_NO must contain exactly 13 digits.');
   }
-  ['CUSTOMER_BUSINESS_TYPE_INTER', 'CUSTOMER_CUSTOMER_TYPE_INTER', 'CUSTOMER_DIRECTORS', 'CUSTOMER_SHAREHOLDERS'].forEach((field) => {
-    if (typeof update[field] === 'string' && update[field].length > 2048) {
-      throw validationError(`${field} must not exceed 2048 characters.`);
-    }
-  });
   if (update.CUSTOMER_REGISTERED_DATE !== undefined && update.CUSTOMER_REGISTERED_DATE !== null && update.CUSTOMER_REGISTERED_DATE !== ''
     && !/^\d{4}-\d{2}-\d{2}$/.test(update.CUSTOMER_REGISTERED_DATE)) {
     throw validationError('CUSTOMER_REGISTERED_DATE must use YYYY-MM-DD.');
   }
-  if (update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT !== undefined
-    && update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT !== null
-    && update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT !== '') {
-    const capitalAmount = Number(update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT);
-    if (!Number.isFinite(capitalAmount) || !/^\d+(\.\d{1,4})?$/.test(String(update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT))) {
-      throw validationError('CUSTOMER_REGISTERED_CAPITAL_AMOUNT must be a decimal with up to 4 decimal places.');
-    }
-    update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT = capitalAmount;
+  const capitalAmount = update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT;
+  const normalizedCapitalAmount = capitalAmount === undefined || capitalAmount === null || capitalAmount === ''
+    ? '0'
+    : String(capitalAmount);
+  if (!/^\d+$/.test(normalizedCapitalAmount)) {
+    throw validationError('CUSTOMER_REGISTERED_CAPITAL_AMOUNT must contain whole numbers only.');
   }
+  update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT = normalizedCapitalAmount;
+  update.CUSTOMER_SIZE_ID = customerSizeIdForCapital(BigInt(normalizedCapitalAmount));
 
   return update;
 }
@@ -414,6 +466,63 @@ async function updateRequestCustomerInfo(id, payload, updatedBy) {
   return getRequestById(id);
 }
 
+function normalizeCreditSuggestionId(value, field) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string') throw validationError(`${field} must be a valid ID.`);
+  return value;
+}
+
+function normalizeRequestCreditSuggestion(payload) {
+  const fields = ['SUGGESTED_TERM_ID', 'SUGGESTED_LIMIT_AMOUNT', 'SUGGESTED_RATING_ID'];
+  const update = {};
+
+  fields.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(payload, field)) update[field] = payload[field];
+  });
+
+  if (!Object.keys(update).length) throw validationError('No credit suggestion fields were supplied.');
+  update.SUGGESTED_TERM_ID = normalizeCreditSuggestionId(update.SUGGESTED_TERM_ID, 'SUGGESTED_TERM_ID');
+  update.SUGGESTED_RATING_ID = normalizeCreditSuggestionId(update.SUGGESTED_RATING_ID, 'SUGGESTED_RATING_ID');
+
+  const limit = update.SUGGESTED_LIMIT_AMOUNT;
+  if (limit === undefined || limit === null || limit === '') {
+    update.SUGGESTED_LIMIT_AMOUNT = null;
+  } else {
+    const normalizedLimit = Number(limit);
+    if (!Number.isFinite(normalizedLimit) || normalizedLimit < 0) {
+      throw validationError('SUGGESTED_LIMIT_AMOUNT must be a non-negative number.');
+    }
+    update.SUGGESTED_LIMIT_AMOUNT = normalizedLimit;
+  }
+
+  return update;
+}
+
+async function updateRequestCreditSuggestion(id, payload, updatedBy) {
+  const { Request, Rating, Term } = getModels();
+  const update = normalizeRequestCreditSuggestion(payload);
+  const request = await Request.findOne({ where: { ID: id, ENABLED: '1' } });
+
+  if (!request) return null;
+  if (request.STATUS_ID === CANCELLED_STATUS_ID || request.STATUS_ID === COMPLETED_STATUS_ID) {
+    const error = new Error('Credit suggestions cannot be edited after this request is cancelled or completed.');
+    error.statusCode = 409;
+    error.code = 'REQUEST_NOT_EDITABLE';
+    throw error;
+  }
+  if (update.SUGGESTED_TERM_ID) {
+    const term = await Term.findByPk(update.SUGGESTED_TERM_ID);
+    if (!term) throw validationError('SUGGESTED_TERM_ID must reference a valid term.');
+  }
+  if (update.SUGGESTED_RATING_ID) {
+    const rating = await Rating.findOne({ where: { ID: update.SUGGESTED_RATING_ID, ENABLED: '1' } });
+    if (!rating) throw validationError('SUGGESTED_RATING_ID must reference an enabled rating.');
+  }
+
+  await request.update({ ...update, UPDATED_DATE: new Date(), UPDATED_BY: updatedBy });
+  return getRequestById(id);
+}
+
 async function cancelRequest(id, updatedBy) {
   const { Request } = getModels();
 
@@ -433,5 +542,6 @@ module.exports = {
   listRequests,
   getRequestById,
   updateRequestCustomerInfo,
+  updateRequestCreditSuggestion,
   cancelRequest,
 };

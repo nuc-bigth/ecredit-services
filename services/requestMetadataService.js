@@ -35,4 +35,10 @@ async function listEnabledRatings() {
   return ratings.map(mapRatingOption);
 }
 
-module.exports = { listEnabledLogTypes, listEnabledRatings, listEnabledStatuses };
+async function listTerms() {
+  const { Term } = getModels();
+  const terms = await Term.findAll({ order: [['NAME', 'ASC']] });
+  return terms.map(mapOption);
+}
+
+module.exports = { listEnabledLogTypes, listEnabledRatings, listEnabledStatuses, listTerms };
