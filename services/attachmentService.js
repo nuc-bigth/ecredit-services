@@ -287,7 +287,123 @@ async function softDeleteAttachment(requestId, attachmentId, updatedBy) {
   }
 }
 
+async function cloneFinancialAnalysisAttachments(sourceRequestId, targetRequestId, updatedBy) {
+  const models = getModels();
+  await assertActiveRequest(sourceRequestId);
+  await assertActiveRequest(targetRequestId);
+  const sourceAttachments = await models.Attachment.findAll({
+    where: {
+      REQUEST_ID: sourceRequestId,
+      ATTACHMENT_TYPE_ID: config.attachments.defaultTypeId,
+      ENABLED: true,
+    },
+    attributes: attachmentAttributes(),
+  });
+  const transaction = await models.Attachment.sequelize.transaction();
+
+  const copiedFiles = [];
+  const createdIds = [];
+  try {
+    await models.Attachment.update(
+      {
+        ENABLED: false,
+        UPDATED_BY: updatedBy,
+        UPDATED_DATE: models.Attachment.sequelize.fn('GETDATE'),
+      },
+      {
+        where: {
+          REQUEST_ID: targetRequestId,
+          ATTACHMENT_TYPE_ID: config.attachments.defaultTypeId,
+          ENABLED: true,
+        },
+        transaction,
+      },
+    );
+
+    if (!sourceAttachments.length) {
+      await transaction.commit();
+      return [];
+    }
+
+    for (const source of sourceAttachments) {
+      const record = source.get({ plain: true });
+      const attachmentId = uuidv4();
+      const extension = path.extname(path.basename(record.ORI_NAME || record.FILE_NAME || '')).slice(0, 20).toLowerCase();
+      const fileName = `${attachmentId}${extension}`;
+      let storage = {
+        storagePath: fileName,
+        storageSize: record.FILE_SIZE,
+        storageMimeType: record.MIME_TYPE,
+      };
+
+      if (config.attachments.storageProvider === 'SHAREPOINT') {
+        const download = await getAttachmentDownload(sourceRequestId, record.ID);
+        const chunks = [];
+        for await (const chunk of download.stream) chunks.push(chunk);
+        const uploaded = await sharePointAttachmentStorage.upload({
+          buffer: Buffer.concat(chunks),
+          originalname: record.ORI_NAME,
+          filename: fileName,
+          mimetype: record.MIME_TYPE,
+          size: Number(record.FILE_SIZE) || Buffer.concat(chunks).length,
+        }, targetRequestId, attachmentId);
+        storage = {
+          storageItemId: uploaded.itemId,
+          storageDriveId: uploaded.driveId,
+          storagePath: uploaded.path,
+          storageSize: uploaded.size,
+          storageMimeType: uploaded.mimeType,
+        };
+        copiedFiles.push({ storageItemId: uploaded.itemId, storageDriveId: uploaded.driveId });
+      } else {
+        const sourcePath = path.join(config.attachments.storageDirectory, path.basename(record.FILE_NAME || ''));
+        const targetPath = path.join(config.attachments.storageDirectory, fileName);
+        await fs.copyFile(sourcePath, targetPath);
+        copiedFiles.push({ path: targetPath });
+      }
+
+      const now = models.Attachment.sequelize.fn('GETDATE');
+      await models.Attachment.create({
+        ID: attachmentId,
+        ORI_NAME: record.ORI_NAME,
+        FILE_NAME: fileName,
+        DESCRIPTION: record.DESCRIPTION || '',
+        ATTACHMENT_TYPE_ID: record.ATTACHMENT_TYPE_ID,
+        REQUEST_ID: targetRequestId,
+        CREATED_DATE: now,
+        UPDATED_DATE: now,
+        CREATED_BY: updatedBy,
+        UPDATED_BY: updatedBy,
+        ENABLED: true,
+        STORAGE_PROVIDER: config.attachments.storageProvider,
+        STORAGE_PATH: storage.storagePath,
+        FILE_SIZE: storage.storageSize,
+        MIME_TYPE: storage.storageMimeType,
+        ...(config.attachments.storageProvider === 'SHAREPOINT' ? {
+          STORAGE_ITEM_ID: storage.storageItemId,
+          STORAGE_DRIVE_ID: storage.storageDriveId,
+        } : {}),
+      }, { fields: attachmentCreateFields(), transaction });
+      createdIds.push(attachmentId);
+    }
+    await transaction.commit();
+    return models.Attachment.findAll({
+      where: { ID: createdIds },
+      attributes: attachmentAttributes(),
+      include: attachmentInclude(models),
+      order: [['UPDATED_DATE', 'DESC']],
+    }).then((attachments) => attachments.map(mapAttachment));
+  } catch (error) {
+    if (transaction && !transaction.finished) await transaction.rollback();
+    await Promise.all(copiedFiles.map((file) => config.attachments.storageProvider === 'SHAREPOINT'
+      ? sharePointAttachmentStorage.remove(file.storageItemId, file.storageDriveId).catch(() => undefined)
+      : fs.unlink(file.path).catch(() => undefined)));
+    throw error;
+  }
+}
+
 module.exports = {
+  cloneFinancialAnalysisAttachments,
   createAttachments,
   getAttachmentDownload,
   listAttachments,

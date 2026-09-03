@@ -114,6 +114,64 @@ async function updateRequestCreditSuggestion(req, res, next) {
   }
 }
 
+async function updateRequestScoringAndPayment(req, res, next) {
+  try {
+    const correlationId = res.locals.correlationId || 'N/A';
+    const updatedBy = Number(req.user?.profile?.CODE);
+    if (!Number.isInteger(updatedBy)) {
+      const error = new Error('Authenticated user profile is missing a numeric employee code.');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    const request = await requestService.updateRequestScoringAndPayment(req.params.id, req.body, updatedBy);
+    if (!request) {
+      const error = new Error(`Request ${req.params.id} was not found.`);
+      error.statusCode = 404;
+      error.code = 'RESOURCE_NOT_FOUND';
+      throw error;
+    }
+
+    res.status(200).json({ success: true, data: request, correlationId });
+  } catch (error) {
+    logger.error(`Error in updateRequestScoringAndPayment: ${error.message}`, {
+      correlationId: res.locals.correlationId,
+      route: { method: req.method, path: req.path },
+      stack: error.stack,
+    });
+    next(error);
+  }
+}
+
+async function cloneRequestData(req, res, next) {
+  try {
+    const correlationId = res.locals.correlationId || 'N/A';
+    const updatedBy = Number(req.user?.profile?.CODE);
+    if (!Number.isInteger(updatedBy)) {
+      const error = new Error('Authenticated user profile is missing a numeric employee code.');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+    const result = await requestService.cloneRequestData(req.params.id, req.body?.sourceRequestId, updatedBy);
+    if (!result) {
+      const error = new Error(`Request ${req.params.id} or source request was not found.`);
+      error.statusCode = 404;
+      error.code = 'RESOURCE_NOT_FOUND';
+      throw error;
+    }
+    res.status(200).json({ success: true, data: result, correlationId });
+  } catch (error) {
+    logger.error(`Error in cloneRequestData: ${error.message}`, {
+      correlationId: res.locals.correlationId,
+      route: { method: req.method, path: req.path },
+      stack: error.stack,
+    });
+    next(error);
+  }
+}
+
 async function cancelRequest(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
@@ -151,4 +209,12 @@ async function cancelRequest(req, res, next) {
   }
 }
 
-module.exports = { listRequests, getRequest, updateRequestCustomerInfo, updateRequestCreditSuggestion, cancelRequest };
+module.exports = {
+  listRequests,
+  getRequest,
+  updateRequestCustomerInfo,
+  updateRequestCreditSuggestion,
+  updateRequestScoringAndPayment,
+  cloneRequestData,
+  cancelRequest,
+};

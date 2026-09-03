@@ -1,6 +1,8 @@
 const express = require('express');
 const authenticationMiddleware = require('../../middlewares/authentication');
 const requestController = require('../../controllers/qas/requestController');
+const cloneRequestData = require('../../controllers/dev/requestController').cloneRequestData;
+const updateRequestScoringAndPayment = require('../../controllers/dev/requestController').updateRequestScoringAndPayment;
 const attachmentController = require('../../controllers/qas/attachmentController');
 const eventLogController = require('../../controllers/eventLogController');
 const requestMetadataController = require('../../controllers/requestMetadataController');
@@ -19,6 +21,8 @@ router.get('/:requestId/attachments/:attachmentId/download', authenticationMiddl
 router.delete('/:requestId/attachments/:attachmentId', authenticationMiddleware, attachmentController.deleteAttachment);
 router.get('/:id', authenticationMiddleware, requestController.getRequest);
 router.patch('/:id/customer-info', authenticationMiddleware, requestController.updateRequestCustomerInfo);
+router.patch('/:id/scoring-payment', authenticationMiddleware, updateRequestScoringAndPayment);
+router.post('/:id/clone-data', authenticationMiddleware, cloneRequestData);
 router.patch('/:id/cancel', authenticationMiddleware, requestController.cancelRequest);
 
 module.exports = router;

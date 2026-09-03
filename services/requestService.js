@@ -1,6 +1,7 @@
 const { Op, QueryTypes, fn, col, where } = require('sequelize');
 const { getModels } = require('../models');
 const { getDatabase } = require('../config/database');
+const attachmentService = require('./attachmentService');
 
 const QUICK_FILTERS = new Set(['rating', 'limit', 'term']);
 const CANCELLED_STATUS_ID = '31d531f4-0420-4db5-aecf-bcfe4a0e8c4a';
@@ -266,6 +267,19 @@ function mapRequest(request) {
     CUSTOMER_SALES_GROUP_CODE: request.REQUESTED_SALES_GROUP || '',
     CRM_NO: request.CRM_NO || '',
     SUBJECT: request.DESCRIPTION || '',
+    PROPOSED_DISPLAYED_NOTES: request.PROPOSED_DISPLAYED_NOTES || '',
+    PROPOSED_NOTES: request.PROPOSED_NOTES || '',
+    SCORING_PROFITABILITY: request.SCORING_PROFITABILITY?.toString() || '0',
+    SCORING_GROWTH: request.SCORING_GROWTH?.toString() || '0',
+    SCORING_LIQUIDITY: request.SCORING_LIQUIDITY?.toString() || '0',
+    SCORING_LEVERAGE: request.SCORING_LEVERAGE?.toString() || '0',
+    SCORING_RATING_ID: request.SCORING_RATING_ID || '',
+    IS_PAY_IN_ADVANCE: Boolean(request.IS_PAY_IN_ADVANCE),
+    IS_PAY_ON_TIME: Boolean(request.IS_PAY_ON_TIME),
+    IS_OVERDUE_GT_10_DAYS: Boolean(request.IS_OVERDUE_GT_10_DAYS),
+    IS_OVERDUE_GT_30_DAYS: Boolean(request.IS_OVERDUE_GT_30_DAYS),
+    IS_OVERDUE_GT_60_DAYS: Boolean(request.IS_OVERDUE_GT_60_DAYS),
+    IS_OVERDUE_GT_90_DAYS: Boolean(request.IS_OVERDUE_GT_90_DAYS),
     SOLD_TO: request.SOLD_TO || '',
     CUSTOMER_TAX_NO: request.CUSTOMER_TAX_NO || '',
     SEARCH_TERM: request.SEARCH_TERM || '',
@@ -523,6 +537,129 @@ async function updateRequestCreditSuggestion(id, payload, updatedBy) {
   return getRequestById(id);
 }
 
+function normalizeRequestScoringAndPayment(payload) {
+  const scoringFields = [
+    'SCORING_PROFITABILITY', 'SCORING_GROWTH', 'SCORING_LIQUIDITY', 'SCORING_LEVERAGE',
+  ];
+  const paymentFields = [
+    'IS_PAY_IN_ADVANCE', 'IS_PAY_ON_TIME', 'IS_OVERDUE_GT_10_DAYS',
+    'IS_OVERDUE_GT_30_DAYS', 'IS_OVERDUE_GT_60_DAYS', 'IS_OVERDUE_GT_90_DAYS',
+  ];
+  const update = {};
+
+  [...scoringFields, 'SCORING_RATING_ID', ...paymentFields].forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(payload, field)) update[field] = payload[field];
+  });
+
+  if (!Object.keys(update).length) throw validationError('No scoring or payment behavior fields were supplied.');
+
+  scoringFields.forEach((field) => {
+    if (!Object.prototype.hasOwnProperty.call(update, field)) return;
+    const value = update[field];
+    if (value === undefined || value === null || value === '') {
+      update[field] = null;
+      return;
+    }
+    const normalizedValue = Number(value);
+    if (!Number.isFinite(normalizedValue)) throw validationError(`${field} must be a number.`);
+    update[field] = normalizedValue;
+  });
+
+  if (Object.prototype.hasOwnProperty.call(update, 'SCORING_RATING_ID')) {
+    update.SCORING_RATING_ID = normalizeCreditSuggestionId(update.SCORING_RATING_ID, 'SCORING_RATING_ID');
+  }
+
+  paymentFields.forEach((field) => {
+    if (!Object.prototype.hasOwnProperty.call(update, field)) return;
+    if (typeof update[field] === 'boolean') return;
+    if (update[field] === 0 || update[field] === 1) {
+      update[field] = Boolean(update[field]);
+      return;
+    }
+    if (update[field] === '0' || update[field] === '1') {
+      update[field] = update[field] === '1';
+      return;
+    }
+    throw validationError(`${field} must be a boolean.`);
+  });
+
+  return update;
+}
+
+async function updateRequestScoringAndPayment(id, payload, updatedBy) {
+  const { Request, Rating } = getModels();
+  const update = normalizeRequestScoringAndPayment(payload);
+  const request = await Request.findOne({ where: { ID: id, ENABLED: '1' } });
+
+  if (!request) return null;
+  if (request.STATUS_ID === CANCELLED_STATUS_ID || request.STATUS_ID === COMPLETED_STATUS_ID) {
+    const error = new Error('Scoring and payment behavior cannot be edited after this request is cancelled or completed.');
+    error.statusCode = 409;
+    error.code = 'REQUEST_NOT_EDITABLE';
+    throw error;
+  }
+  if (update.SCORING_RATING_ID) {
+    const rating = await Rating.findOne({ where: { ID: update.SCORING_RATING_ID, ENABLED: '1' } });
+    if (!rating) throw validationError('SCORING_RATING_ID must reference an enabled rating.');
+  }
+
+  await request.update({ ...update, UPDATED_DATE: new Date(), UPDATED_BY: updatedBy });
+  return getRequestById(id);
+}
+
+const CLONE_FIELDS = [
+  'SCORING_PROFITABILITY', 'SCORING_GROWTH', 'SCORING_LIQUIDITY', 'SCORING_LEVERAGE', 'SCORING_RATING_ID',
+  'IS_PAY_IN_ADVANCE', 'IS_PAY_ON_TIME', 'IS_OVERDUE_GT_10_DAYS', 'IS_OVERDUE_GT_30_DAYS',
+  'IS_OVERDUE_GT_60_DAYS', 'IS_OVERDUE_GT_90_DAYS', 'PROPOSED_DISPLAYED_NOTES', 'PROPOSED_NOTES',
+];
+
+async function cloneRequestData(targetId, sourceId, updatedBy) {
+  const { Request, Rating } = getModels();
+  if (typeof sourceId !== 'string' || !sourceId.trim()) throw validationError('sourceRequestId is required.');
+  const [target, source] = await Promise.all([
+    Request.findOne({ where: { ID: targetId, ENABLED: '1' } }),
+    Request.findOne({ where: { ID: sourceId, ENABLED: '1' } }),
+  ]);
+  if (!target || !source) return null;
+  if (target.STATUS_ID === CANCELLED_STATUS_ID || target.STATUS_ID === COMPLETED_STATUS_ID) {
+    const error = new Error('Request data cannot be cloned into a cancelled or completed request.');
+    error.statusCode = 409;
+    error.code = 'REQUEST_NOT_EDITABLE';
+    throw error;
+  }
+  if (source.ID === target.ID) {
+    const error = new Error('A request cannot clone its own data.');
+    error.statusCode = 400;
+    error.code = 'INVALID_INPUT';
+    throw error;
+  }
+  const update = {};
+  CLONE_FIELDS.forEach((field) => { update[field] = source[field]; });
+  ['SCORING_PROFITABILITY', 'SCORING_GROWTH', 'SCORING_LIQUIDITY', 'SCORING_LEVERAGE'].forEach((field) => {
+    if (update[field] !== null && update[field] !== undefined && !Number.isFinite(Number(update[field]))) {
+      const error = new Error(`${field} must be a number.`);
+      error.statusCode = 400;
+      error.code = 'INVALID_INPUT';
+      throw error;
+    }
+  });
+  if (update.SCORING_RATING_ID) {
+    const rating = await Rating.findOne({ where: { ID: update.SCORING_RATING_ID, ENABLED: '1' } });
+    if (!rating) throw validationError('SCORING_RATING_ID must reference an enabled rating.');
+  }
+  const originalValues = {};
+  CLONE_FIELDS.forEach((field) => { originalValues[field] = target[field]; });
+  const databaseNow = Request.sequelize.fn('GETDATE');
+  await target.update({ ...update, UPDATED_DATE: databaseNow, UPDATED_BY: updatedBy });
+  try {
+    const attachments = await attachmentService.cloneFinancialAnalysisAttachments(sourceId, targetId, updatedBy);
+    return { request: await getRequestById(targetId), attachments };
+  } catch (error) {
+    await target.update({ ...originalValues, UPDATED_DATE: Request.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy });
+    throw error;
+  }
+}
+
 async function cancelRequest(id, updatedBy) {
   const { Request } = getModels();
 
@@ -543,5 +680,7 @@ module.exports = {
   getRequestById,
   updateRequestCustomerInfo,
   updateRequestCreditSuggestion,
+  updateRequestScoringAndPayment,
+  cloneRequestData,
   cancelRequest,
 };
