@@ -6,7 +6,7 @@ module.exports = (sequelize) =>
     'Employee',
     {
       EMP_CODE: {
-        type: DataTypes.STRING,
+        type: DataTypes.INTEGER,
         primaryKey: true,
       },
       USERNAME: DataTypes.STRING,

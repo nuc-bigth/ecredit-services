@@ -69,7 +69,7 @@ function nonBlankName(modelAlias) {
 }
 
 function buildWhere(query) {
-  const conditions = [{ ENABLED: '1' }];
+  const conditions = [{ ENABLED: true }];
 
   const relatedCustomerNo = typeof query.relatedCustomerNo === 'string' ? query.relatedCustomerNo.trim() : '';
   const relatedTaxId = typeof query.relatedTaxId === 'string' ? query.relatedTaxId.trim() : '';
@@ -265,14 +265,28 @@ function mapRequest(request) {
     CUSTOMER_NAME_ENG: request.CUSTOMER_NAME_ENG || '',
     CUSTOMER_SALES_GROUP: salesGroupName(request.REQUESTED_SALES_GROUP),
     CUSTOMER_SALES_GROUP_CODE: request.REQUESTED_SALES_GROUP || '',
+    REQUESTED_SALES_GROUP: request.REQUESTED_SALES_GROUP || '',
+    REQUESTED_CUSTOMER_TYPE: request.REQUESTED_CUSTOMER_TYPE || '',
+    REQUESTED_SELLING_TYPE: request.REQUESTED_SELLING_TYPE || '',
+    REQUESTED_EXPECTED_SALES_AMOUNT: request.REQUESTED_EXPECTED_SALES_AMOUNT === null || request.REQUESTED_EXPECTED_SALES_AMOUNT === undefined
+      ? null : toNumber(request.REQUESTED_EXPECTED_SALES_AMOUNT),
+    REQUESTED_DELIVERY_FREQUENCY: request.REQUESTED_DELIVERY_FREQUENCY || '',
+    REQUESTED_ADDITIONAL_EXPECTED_AMOUNT: request.REQUESTED_ADDITIONAL_EXPECTED_AMOUNT === null || request.REQUESTED_ADDITIONAL_EXPECTED_AMOUNT === undefined
+      ? null : toNumber(request.REQUESTED_ADDITIONAL_EXPECTED_AMOUNT),
+    REQUESTED_NOTES: request.REQUESTED_NOTES || '',
     CRM_NO: request.CRM_NO || '',
     SUBJECT: request.DESCRIPTION || '',
     PROPOSED_DISPLAYED_NOTES: request.PROPOSED_DISPLAYED_NOTES || '',
     PROPOSED_NOTES: request.PROPOSED_NOTES || '',
-    SCORING_PROFITABILITY: request.SCORING_PROFITABILITY?.toString() || '0',
-    SCORING_GROWTH: request.SCORING_GROWTH?.toString() || '0',
-    SCORING_LIQUIDITY: request.SCORING_LIQUIDITY?.toString() || '0',
-    SCORING_LEVERAGE: request.SCORING_LEVERAGE?.toString() || '0',
+    REF_FINANCIAL_STATEMENT_FY: formatDate(request.REF_FINANCIAL_STATEMENT_FY),
+    SCORING_PROFITABILITY: request.SCORING_PROFITABILITY?.toString() || '-',
+    SCORING_GROWTH: request.SCORING_GROWTH?.toString() || '-',
+    SCORING_LIQUIDITY: request.SCORING_LIQUIDITY?.toString() || '-',
+    SCORING_LEVERAGE: request.SCORING_LEVERAGE?.toString() || '-',
+    EXISTING_PROFITABILITY: request.EXISTING_PROFITABILITY?.toString() || '-',
+    EXISTING_GROWTH: request.EXISTING_GROWTH?.toString() || '-',
+    EXISTING_LIQUIDITY: request.EXISTING_LIQUIDITY?.toString() || '-',
+    EXISTING_LEVERAGE: request.EXISTING_LEVERAGE?.toString() || '-',
     SCORING_RATING_ID: request.SCORING_RATING_ID || '',
     IS_PAY_IN_ADVANCE: Boolean(request.IS_PAY_IN_ADVANCE),
     IS_PAY_ON_TIME: Boolean(request.IS_PAY_ON_TIME),
@@ -280,18 +294,27 @@ function mapRequest(request) {
     IS_OVERDUE_GT_30_DAYS: Boolean(request.IS_OVERDUE_GT_30_DAYS),
     IS_OVERDUE_GT_60_DAYS: Boolean(request.IS_OVERDUE_GT_60_DAYS),
     IS_OVERDUE_GT_90_DAYS: Boolean(request.IS_OVERDUE_GT_90_DAYS),
+    IS_CLEAR_OUTSTANDING_BALANCE_PROPOSED: Boolean(request.IS_CLEAR_OUTSTANDING_BALANCE_PROPOSED),
+    IS_WITHIN_APPROVED_LIMIT_PROPOSED: Boolean(request.IS_WITHIN_APPROVED_LIMIT_PROPOSED),
+    IS_BANK_GUARANTEE_PROPOSED: Boolean(request.IS_BANK_GUARANTEE_PROPOSED),
+    PROPOSED_BANK_GUARANTEE_AMOUNT: toNumber(request.PROPOSED_BANK_GUARANTEE_AMOUNT),
+    IS_CASH_DEPOSIT_PROPOSED: Boolean(request.IS_CASH_DEPOSIT_PROPOSED),
+    PROPOSED_CASH_DEPOSIT_AMOUNT: toNumber(request.PROPOSED_CASH_DEPOSIT_AMOUNT),
     SOLD_TO: request.SOLD_TO || '',
     CUSTOMER_TAX_NO: request.CUSTOMER_TAX_NO || '',
     SEARCH_TERM: request.SEARCH_TERM || '',
     EXISTING_RATING_ID: request.EXISTING_RATING_ID || '',
     EXISTING_RATING: existingRating,
     REQUESTED_RATING_ID: request.REQUESTED_RATING_ID || '',
+    REQUESTED_LIMIT_AMOUNT: request.REQUESTED_LIMIT_AMOUNT === null || request.REQUESTED_LIMIT_AMOUNT === undefined
+      ? null : toNumber(request.REQUESTED_LIMIT_AMOUNT),
     REQUESTED_RATING: requestedRating,
     PROPOSED_RATING_ID: request.PROPOSED_RATING_ID || '',
     PROPOSED_RATING: proposedRating,
     REQUESTED_LIMIT: requestedLimit,
     PROPOSED_LIMIT: proposedLimit,
     REQUESTED_TERM: requestedTerm,
+    REQUESTED_TERM_ID: request.REQUESTED_TERM_ID || '',
     PROPOSED_TERM_ID: request.PROPOSED_TERM_ID || '',
     PROPOSED_TERM: proposedTerm,
     PROPOSED_VALID_FROM: request.PROPOSED_VALID_FROM || null,
@@ -398,7 +421,7 @@ async function listRequests(query) {
 async function getRequestById(id) {
   const models = getModels();
   const request = await models.Request.findOne({
-    where: { ID: id, ENABLED: '1' },
+    where: { ID: id, ENABLED: true },
     include: buildIncludes(models),
   });
 
@@ -414,6 +437,11 @@ function validationError(message) {
   error.statusCode = 400;
   error.code = 'VALIDATION_ERROR';
   return error;
+}
+
+function databaseDateFromYmd(sequelize, value) {
+  const [year, month, day] = value.split('-').map(Number);
+  return sequelize.fn('DATEFROMPARTS', year, month, day);
 }
 
 function normalizeRequestCustomerInfo(payload) {
@@ -442,9 +470,20 @@ function normalizeRequestCustomerInfo(payload) {
     && !/^\d{13}$/.test(update.CUSTOMER_TAX_NO)) {
     throw validationError('CUSTOMER_TAX_NO must contain exactly 13 digits.');
   }
-  if (update.CUSTOMER_REGISTERED_DATE !== undefined && update.CUSTOMER_REGISTERED_DATE !== null && update.CUSTOMER_REGISTERED_DATE !== ''
-    && !/^\d{4}-\d{2}-\d{2}$/.test(update.CUSTOMER_REGISTERED_DATE)) {
-    throw validationError('CUSTOMER_REGISTERED_DATE must use YYYY-MM-DD.');
+  if (Object.prototype.hasOwnProperty.call(update, 'CUSTOMER_REGISTERED_DATE')) {
+    if (update.CUSTOMER_REGISTERED_DATE === undefined || update.CUSTOMER_REGISTERED_DATE === null
+      || update.CUSTOMER_REGISTERED_DATE === '') {
+      update.CUSTOMER_REGISTERED_DATE = null;
+    } else if (typeof update.CUSTOMER_REGISTERED_DATE !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}$/.test(update.CUSTOMER_REGISTERED_DATE)) {
+      throw validationError('CUSTOMER_REGISTERED_DATE must use YYYY-MM-DD.');
+    } else {
+      const parsedDate = new Date(`${update.CUSTOMER_REGISTERED_DATE}T00:00:00Z`);
+      if (Number.isNaN(parsedDate.getTime())
+        || parsedDate.toISOString().slice(0, 10) !== update.CUSTOMER_REGISTERED_DATE) {
+        throw validationError('CUSTOMER_REGISTERED_DATE must be a valid calendar date.');
+      }
+    }
   }
   const capitalAmount = update.CUSTOMER_REGISTERED_CAPITAL_AMOUNT;
   const normalizedCapitalAmount = capitalAmount === undefined || capitalAmount === null || capitalAmount === ''
@@ -462,7 +501,7 @@ function normalizeRequestCustomerInfo(payload) {
 async function updateRequestCustomerInfo(id, payload, updatedBy) {
   const { Request, Size } = getModels();
   const update = normalizeRequestCustomerInfo(payload);
-  const request = await Request.findOne({ where: { ID: id, ENABLED: '1' } });
+  const request = await Request.findOne({ where: { ID: id, ENABLED: true } });
 
   if (!request) return null;
   if (request.STATUS_ID === CANCELLED_STATUS_ID || request.STATUS_ID === COMPLETED_STATUS_ID) {
@@ -476,7 +515,11 @@ async function updateRequestCustomerInfo(id, payload, updatedBy) {
     if (!size) throw validationError('CUSTOMER_SIZE_ID must reference an enabled size.');
   }
 
-  await request.update({ ...update, UPDATED_DATE: new Date(), UPDATED_BY: updatedBy });
+  if (typeof update.CUSTOMER_REGISTERED_DATE === 'string') {
+    update.CUSTOMER_REGISTERED_DATE = databaseDateFromYmd(Request.sequelize, update.CUSTOMER_REGISTERED_DATE);
+  }
+
+  await request.update({ ...update, UPDATED_DATE: Request.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy });
   return getRequestById(id);
 }
 
@@ -487,7 +530,13 @@ function normalizeCreditSuggestionId(value, field) {
 }
 
 function normalizeRequestCreditSuggestion(payload) {
-  const fields = ['PROPOSED_TERM_ID', 'PROPOSED_LIMIT_AMOUNT', 'PROPOSED_RATING_ID'];
+  const fields = [
+    'PROPOSED_TERM_ID', 'PROPOSED_LIMIT_AMOUNT', 'PROPOSED_RATING_ID',
+    'PROPOSED_DISPLAYED_NOTES', 'PROPOSED_NOTES',
+    'IS_CLEAR_OUTSTANDING_BALANCE_PROPOSED', 'IS_WITHIN_APPROVED_LIMIT_PROPOSED',
+    'IS_BANK_GUARANTEE_PROPOSED', 'PROPOSED_BANK_GUARANTEE_AMOUNT',
+    'IS_CASH_DEPOSIT_PROPOSED', 'PROPOSED_CASH_DEPOSIT_AMOUNT',
+  ];
   const update = {};
 
   fields.forEach((field) => {
@@ -497,6 +546,12 @@ function normalizeRequestCreditSuggestion(payload) {
   if (!Object.keys(update).length) throw validationError('No credit suggestion fields were supplied.');
   update.PROPOSED_TERM_ID = normalizeCreditSuggestionId(update.PROPOSED_TERM_ID, 'PROPOSED_TERM_ID');
   update.PROPOSED_RATING_ID = normalizeCreditSuggestionId(update.PROPOSED_RATING_ID, 'PROPOSED_RATING_ID');
+
+  ['PROPOSED_DISPLAYED_NOTES', 'PROPOSED_NOTES'].forEach((field) => {
+    if (update[field] === undefined) return;
+    if (typeof update[field] !== 'string') throw validationError(`${field} must be a string.`);
+    if (update[field].length > 1000000) throw validationError(`${field} exceeds the maximum length.`);
+  });
 
   const limit = update.PROPOSED_LIMIT_AMOUNT;
   if (limit === undefined || limit === null || limit === '') {
@@ -509,13 +564,45 @@ function normalizeRequestCreditSuggestion(payload) {
     update.PROPOSED_LIMIT_AMOUNT = normalizedLimit;
   }
 
+  [
+    'IS_CLEAR_OUTSTANDING_BALANCE_PROPOSED', 'IS_WITHIN_APPROVED_LIMIT_PROPOSED',
+    'IS_BANK_GUARANTEE_PROPOSED', 'IS_CASH_DEPOSIT_PROPOSED',
+  ].forEach((field) => {
+    if (!Object.prototype.hasOwnProperty.call(update, field)) return;
+    if (typeof update[field] === 'boolean') return;
+    if (update[field] === 0 || update[field] === 1) {
+      update[field] = Boolean(update[field]);
+      return;
+    }
+    if (update[field] === '0' || update[field] === '1') {
+      update[field] = update[field] === '1';
+      return;
+    }
+    throw validationError(`${field} must be a boolean.`);
+  });
+
+  [
+    'PROPOSED_BANK_GUARANTEE_AMOUNT', 'PROPOSED_CASH_DEPOSIT_AMOUNT',
+  ].forEach((field) => {
+    if (!Object.prototype.hasOwnProperty.call(update, field)) return;
+    if (update[field] === undefined || update[field] === null || update[field] === '') {
+      update[field] = 0;
+      return;
+    }
+    const normalizedAmount = Number(update[field]);
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount < 0) {
+      throw validationError(`${field} must be a non-negative number.`);
+    }
+    update[field] = normalizedAmount;
+  });
+
   return update;
 }
 
 async function updateRequestCreditSuggestion(id, payload, updatedBy) {
   const { Request, Rating, Term } = getModels();
   const update = normalizeRequestCreditSuggestion(payload);
-  const request = await Request.findOne({ where: { ID: id, ENABLED: '1' } });
+  const request = await Request.findOne({ where: { ID: id, ENABLED: true } });
 
   if (!request) return null;
   if (request.STATUS_ID === CANCELLED_STATUS_ID || request.STATUS_ID === COMPLETED_STATUS_ID) {
@@ -533,7 +620,7 @@ async function updateRequestCreditSuggestion(id, payload, updatedBy) {
     if (!rating) throw validationError('PROPOSED_RATING_ID must reference an enabled rating.');
   }
 
-  await request.update({ ...update, UPDATED_DATE: new Date(), UPDATED_BY: updatedBy });
+  await request.update({ ...update, UPDATED_DATE: Request.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy });
   return getRequestById(id);
 }
 
@@ -547,7 +634,7 @@ function normalizeRequestScoringAndPayment(payload) {
   ];
   const update = {};
 
-  [...scoringFields, 'SCORING_RATING_ID', ...paymentFields].forEach((field) => {
+  [...scoringFields, 'SCORING_RATING_ID', ...paymentFields, 'REF_FINANCIAL_STATEMENT_FY'].forEach((field) => {
     if (Object.prototype.hasOwnProperty.call(payload, field)) update[field] = payload[field];
   });
 
@@ -556,17 +643,23 @@ function normalizeRequestScoringAndPayment(payload) {
   scoringFields.forEach((field) => {
     if (!Object.prototype.hasOwnProperty.call(update, field)) return;
     const value = update[field];
-    if (value === undefined || value === null || value === '') {
-      update[field] = null;
-      return;
-    }
-    const normalizedValue = Number(value);
-    if (!Number.isFinite(normalizedValue)) throw validationError(`${field} must be a number.`);
-    update[field] = normalizedValue;
+    update[field] = value === undefined || value === null || String(value).trim() === ''
+      ? '-' : String(value);
   });
 
   if (Object.prototype.hasOwnProperty.call(update, 'SCORING_RATING_ID')) {
     update.SCORING_RATING_ID = normalizeCreditSuggestionId(update.SCORING_RATING_ID, 'SCORING_RATING_ID');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(update, 'REF_FINANCIAL_STATEMENT_FY')) {
+    const value = update.REF_FINANCIAL_STATEMENT_FY;
+    if (value === undefined || value === null || value === '') {
+      update.REF_FINANCIAL_STATEMENT_FY = null;
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(value)
+      || Number.isNaN(new Date(`${value}T00:00:00Z`).getTime())
+      || new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) !== value) {
+      throw validationError('REF_FINANCIAL_STATEMENT_FY must use YYYY-MM-DD.');
+    }
   }
 
   paymentFields.forEach((field) => {
@@ -589,7 +682,7 @@ function normalizeRequestScoringAndPayment(payload) {
 async function updateRequestScoringAndPayment(id, payload, updatedBy) {
   const { Request, Rating } = getModels();
   const update = normalizeRequestScoringAndPayment(payload);
-  const request = await Request.findOne({ where: { ID: id, ENABLED: '1' } });
+  const request = await Request.findOne({ where: { ID: id, ENABLED: true } });
 
   if (!request) return null;
   if (request.STATUS_ID === CANCELLED_STATUS_ID || request.STATUS_ID === COMPLETED_STATUS_ID) {
@@ -603,22 +696,89 @@ async function updateRequestScoringAndPayment(id, payload, updatedBy) {
     if (!rating) throw validationError('SCORING_RATING_ID must reference an enabled rating.');
   }
 
-  await request.update({ ...update, UPDATED_DATE: new Date(), UPDATED_BY: updatedBy });
+  if (typeof update.REF_FINANCIAL_STATEMENT_FY === 'string') {
+    update.REF_FINANCIAL_STATEMENT_FY = databaseDateFromYmd(Request.sequelize, update.REF_FINANCIAL_STATEMENT_FY);
+  }
+
+  await request.update({ ...update, UPDATED_DATE: Request.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy });
+  return getRequestById(id);
+}
+
+function normalizeRequestedAmount(value, field) {
+  if (value === undefined || value === null || value === '') return null;
+  const normalizedValue = Number(value);
+  if (!Number.isFinite(normalizedValue) || normalizedValue < 0) {
+    throw validationError(`${field} must be a non-negative number.`);
+  }
+  return normalizedValue;
+}
+
+function normalizeRequestRequestedDetails(payload) {
+  const fields = [
+    'REQUESTED_SALES_GROUP', 'REQUESTED_CUSTOMER_TYPE', 'REQUESTED_LIMIT_AMOUNT', 'REQUESTED_TERM_ID',
+    'REQUESTED_RATING_ID', 'REQUESTED_SELLING_TYPE', 'REQUESTED_EXPECTED_SALES_AMOUNT',
+    'REQUESTED_DELIVERY_FREQUENCY', 'REQUESTED_ADDITIONAL_EXPECTED_AMOUNT', 'REQUESTED_NOTES',
+  ];
+  const update = {};
+  fields.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(payload, field)) update[field] = payload[field];
+  });
+  if (!Object.keys(update).length) throw validationError('No requested detail fields were supplied.');
+
+  ['REQUESTED_SALES_GROUP', 'REQUESTED_CUSTOMER_TYPE', 'REQUESTED_TERM_ID', 'REQUESTED_RATING_ID',
+    'REQUESTED_SELLING_TYPE', 'REQUESTED_DELIVERY_FREQUENCY', 'REQUESTED_NOTES']
+    .forEach((field) => {
+      if (!Object.prototype.hasOwnProperty.call(update, field)) return;
+      if (update[field] === null) update[field] = '';
+      const maximumLength = field === 'REQUESTED_DELIVERY_FREQUENCY' ? 50 : 2048;
+      if (typeof update[field] !== 'string' || update[field].length > maximumLength) {
+        throw validationError(`${field} must be a string no longer than ${maximumLength} characters.`);
+      }
+    });
+  ['REQUESTED_LIMIT_AMOUNT', 'REQUESTED_EXPECTED_SALES_AMOUNT', 'REQUESTED_ADDITIONAL_EXPECTED_AMOUNT']
+    .forEach((field) => {
+      if (Object.prototype.hasOwnProperty.call(update, field)) update[field] = normalizeRequestedAmount(update[field], field);
+    });
+  return update;
+}
+
+async function updateRequestRequestedDetails(id, payload, updatedBy) {
+  const { Request, Rating, Term } = getModels();
+  const update = normalizeRequestRequestedDetails(payload);
+  const request = await Request.findOne({ where: { ID: id, ENABLED: true } });
+  if (!request) return null;
+  if (request.STATUS_ID === CANCELLED_STATUS_ID || request.STATUS_ID === COMPLETED_STATUS_ID) {
+    const error = new Error('Requested details cannot be edited after this request is cancelled or completed.');
+    error.statusCode = 409;
+    error.code = 'REQUEST_NOT_EDITABLE';
+    throw error;
+  }
+  if (update.REQUESTED_TERM_ID) {
+    const term = await Term.findByPk(update.REQUESTED_TERM_ID);
+    if (!term) throw validationError('REQUESTED_TERM_ID must reference a valid term.');
+  }
+  if (update.REQUESTED_RATING_ID) {
+    const rating = await Rating.findOne({ where: { ID: update.REQUESTED_RATING_ID, ENABLED: '1' } });
+    if (!rating) throw validationError('REQUESTED_RATING_ID must reference an enabled rating.');
+  }
+  await request.update({ ...update, UPDATED_DATE: Request.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy });
   return getRequestById(id);
 }
 
 const CLONE_FIELDS = [
   'SCORING_PROFITABILITY', 'SCORING_GROWTH', 'SCORING_LIQUIDITY', 'SCORING_LEVERAGE', 'SCORING_RATING_ID',
+  'EXISTING_PROFITABILITY', 'EXISTING_GROWTH', 'EXISTING_LIQUIDITY', 'EXISTING_LEVERAGE',
   'IS_PAY_IN_ADVANCE', 'IS_PAY_ON_TIME', 'IS_OVERDUE_GT_10_DAYS', 'IS_OVERDUE_GT_30_DAYS',
   'IS_OVERDUE_GT_60_DAYS', 'IS_OVERDUE_GT_90_DAYS', 'PROPOSED_DISPLAYED_NOTES', 'PROPOSED_NOTES',
+  'REF_FINANCIAL_STATEMENT_FY',
 ];
 
 async function cloneRequestData(targetId, sourceId, updatedBy) {
   const { Request, Rating } = getModels();
   if (typeof sourceId !== 'string' || !sourceId.trim()) throw validationError('sourceRequestId is required.');
   const [target, source] = await Promise.all([
-    Request.findOne({ where: { ID: targetId, ENABLED: '1' } }),
-    Request.findOne({ where: { ID: sourceId, ENABLED: '1' } }),
+    Request.findOne({ where: { ID: targetId, ENABLED: true } }),
+    Request.findOne({ where: { ID: sourceId, ENABLED: true } }),
   ]);
   if (!target || !source) return null;
   if (target.STATUS_ID === CANCELLED_STATUS_ID || target.STATUS_ID === COMPLETED_STATUS_ID) {
@@ -635,14 +795,6 @@ async function cloneRequestData(targetId, sourceId, updatedBy) {
   }
   const update = {};
   CLONE_FIELDS.forEach((field) => { update[field] = source[field]; });
-  ['SCORING_PROFITABILITY', 'SCORING_GROWTH', 'SCORING_LIQUIDITY', 'SCORING_LEVERAGE'].forEach((field) => {
-    if (update[field] !== null && update[field] !== undefined && !Number.isFinite(Number(update[field]))) {
-      const error = new Error(`${field} must be a number.`);
-      error.statusCode = 400;
-      error.code = 'INVALID_INPUT';
-      throw error;
-    }
-  });
   if (update.SCORING_RATING_ID) {
     const rating = await Rating.findOne({ where: { ID: update.SCORING_RATING_ID, ENABLED: '1' } });
     if (!rating) throw validationError('SCORING_RATING_ID must reference an enabled rating.');
@@ -669,7 +821,7 @@ async function cancelRequest(id, updatedBy) {
       UPDATED_DATE: Request.sequelize.fn('GETDATE'),
       UPDATED_BY: updatedBy,
     },
-    { where: { ID: id, ENABLED: '1' } },
+    { where: { ID: id, ENABLED: true } },
   );
 
   return affectedRows > 0;
@@ -681,6 +833,7 @@ module.exports = {
   updateRequestCustomerInfo,
   updateRequestCreditSuggestion,
   updateRequestScoringAndPayment,
+  updateRequestRequestedDetails,
   cloneRequestData,
   cancelRequest,
 };

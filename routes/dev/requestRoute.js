@@ -22,6 +22,7 @@ router.get('/:id', authenticationMiddleware, requestController.getRequest);
 router.patch('/:id/customer-info', authenticationMiddleware, requestController.updateRequestCustomerInfo);
 router.patch('/:id/credit-suggestion', authenticationMiddleware, requestController.updateRequestCreditSuggestion);
 router.patch('/:id/scoring-payment', authenticationMiddleware, requestController.updateRequestScoringAndPayment);
+router.patch('/:id/requested-details', authenticationMiddleware, requestController.updateRequestRequestedDetails);
 router.post('/:id/clone-data', authenticationMiddleware, requestController.cloneRequestData);
 router.patch('/:id/cancel', authenticationMiddleware, requestController.cancelRequest);
 
