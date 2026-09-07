@@ -9,6 +9,7 @@ const COMPLETED_STATUS_ID = '407e23f9-caf5-4c4a-801d-598cf437d1ae';
 const SMALL_CUSTOMER_SIZE_ID = 'd8ce72cf-0228-4293-9699-311eeecb926d';
 const MEDIUM_CUSTOMER_SIZE_ID = '9d9d84c7-8926-4629-b06f-2cb4d434fc33';
 const LARGE_CUSTOMER_SIZE_ID = '4b2d23db-96d6-4cef-b6ae-10a97a8ce1cb';
+const MAX_RICH_TEXT_SIZE = 8 * 1024 * 1024; // 8 MiB
 const MEDIUM_CUSTOMER_CAPITAL_MINIMUM = 50000000n;
 const LARGE_CUSTOMER_CAPITAL_MINIMUM = 200000000n;
 const SORT_FIELDS = {
@@ -444,6 +445,12 @@ function databaseDateFromYmd(sequelize, value) {
   return sequelize.fn('DATEFROMPARTS', year, month, day);
 }
 
+function normalizeCloneDate(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
 function normalizeRequestCustomerInfo(payload) {
   const fields = [
     'CUSTOMER_TAX_NO',
@@ -462,13 +469,12 @@ function normalizeRequestCustomerInfo(payload) {
   });
 
   if (!Object.keys(update).length) throw validationError('No request customer fields were supplied.');
-  if (typeof update.CUSTOMER_TAX_NO === 'string' && update.CUSTOMER_TAX_NO.length > 13) {
-    throw validationError('CUSTOMER_TAX_NO must not exceed 13 characters.');
+  if (typeof update.CUSTOMER_TAX_NO !== 'string') {
+    throw validationError('CUSTOMER_TAX_NO is required.');
   }
-  if (typeof update.CUSTOMER_TAX_NO === 'string'
-    && update.CUSTOMER_TAX_NO !== ''
-    && !/^\d{13}$/.test(update.CUSTOMER_TAX_NO)) {
-    throw validationError('CUSTOMER_TAX_NO must contain exactly 13 digits.');
+  update.CUSTOMER_TAX_NO = update.CUSTOMER_TAX_NO.trim();
+  if (update.CUSTOMER_TAX_NO !== '-' && !/^\d{13}$/.test(update.CUSTOMER_TAX_NO)) {
+    throw validationError('CUSTOMER_TAX_NO must be - or contain exactly 13 digits.');
   }
   if (Object.prototype.hasOwnProperty.call(update, 'CUSTOMER_REGISTERED_DATE')) {
     if (update.CUSTOMER_REGISTERED_DATE === undefined || update.CUSTOMER_REGISTERED_DATE === null
@@ -550,7 +556,9 @@ function normalizeRequestCreditSuggestion(payload) {
   ['PROPOSED_DISPLAYED_NOTES', 'PROPOSED_NOTES'].forEach((field) => {
     if (update[field] === undefined) return;
     if (typeof update[field] !== 'string') throw validationError(`${field} must be a string.`);
-    if (update[field].length > 1000000) throw validationError(`${field} exceeds the maximum length.`);
+    if (Buffer.byteLength(update[field], 'utf8') > MAX_RICH_TEXT_SIZE) {
+      throw validationError(`${field} exceeds the maximum length.`);
+    }
   });
 
   const limit = update.PROPOSED_LIMIT_AMOUNT;
@@ -766,6 +774,8 @@ async function updateRequestRequestedDetails(id, payload, updatedBy) {
 }
 
 const CLONE_FIELDS = [
+  'CUSTOMER_TAX_NO', 'CUSTOMER_REGISTERED_DATE', 'CUSTOMER_REGISTERED_CAPITAL_AMOUNT', 'CUSTOMER_SIZE_ID',
+  'CUSTOMER_BUSINESS_TYPE_INTER', 'CUSTOMER_CUSTOMER_TYPE_INTER', 'CUSTOMER_DIRECTORS', 'CUSTOMER_SHAREHOLDERS',
   'SCORING_PROFITABILITY', 'SCORING_GROWTH', 'SCORING_LIQUIDITY', 'SCORING_LEVERAGE', 'SCORING_RATING_ID',
   'EXISTING_PROFITABILITY', 'EXISTING_GROWTH', 'EXISTING_LIQUIDITY', 'EXISTING_LEVERAGE',
   'IS_PAY_IN_ADVANCE', 'IS_PAY_ON_TIME', 'IS_OVERDUE_GT_10_DAYS', 'IS_OVERDUE_GT_30_DAYS',
@@ -795,6 +805,14 @@ async function cloneRequestData(targetId, sourceId, updatedBy) {
   }
   const update = {};
   CLONE_FIELDS.forEach((field) => { update[field] = source[field]; });
+  update.CUSTOMER_REGISTERED_DATE = normalizeCloneDate(update.CUSTOMER_REGISTERED_DATE);
+  update.REF_FINANCIAL_STATEMENT_FY = normalizeCloneDate(update.REF_FINANCIAL_STATEMENT_FY);
+  if (update.CUSTOMER_REGISTERED_DATE) {
+    update.CUSTOMER_REGISTERED_DATE = databaseDateFromYmd(Request.sequelize, update.CUSTOMER_REGISTERED_DATE);
+  }
+  if (update.REF_FINANCIAL_STATEMENT_FY) {
+    update.REF_FINANCIAL_STATEMENT_FY = databaseDateFromYmd(Request.sequelize, update.REF_FINANCIAL_STATEMENT_FY);
+  }
   if (update.SCORING_RATING_ID) {
     const rating = await Rating.findOne({ where: { ID: update.SCORING_RATING_ID, ENABLED: '1' } });
     if (!rating) throw validationError('SCORING_RATING_ID must reference an enabled rating.');
