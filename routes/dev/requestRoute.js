@@ -3,6 +3,7 @@ const authenticationMiddleware = require('../../middlewares/authentication');
 const requestController = require('../../controllers/dev/requestController');
 const attachmentController = require('../../controllers/dev/attachmentController');
 const eventLogController = require('../../controllers/eventLogController');
+const approvalHistoryController = require('../../controllers/approvalHistoryController');
 const requestMetadataController = require('../../controllers/requestMetadataController');
 
 const router = express.Router();
@@ -14,6 +15,7 @@ router.get('/ratings', authenticationMiddleware, requestMetadataController.listE
 router.get('/terms', authenticationMiddleware, requestMetadataController.listTerms);
 router.get('/:requestId/event-logs', authenticationMiddleware, eventLogController.listRequestEvents);
 router.get('/:requestId/event-logs/:logId', authenticationMiddleware, eventLogController.getRequestEvent);
+router.get('/:requestId/approval-history', authenticationMiddleware, approvalHistoryController.listApprovalHistory);
 router.get('/:requestId/attachments', authenticationMiddleware, attachmentController.listAttachments);
 router.post('/:requestId/attachments', authenticationMiddleware, attachmentController.uploadAttachments);
 router.get('/:requestId/attachments/:attachmentId/download', authenticationMiddleware, attachmentController.downloadAttachment);
