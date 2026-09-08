@@ -15,6 +15,7 @@ const defineUserPermission = require('./userPermission');
 const defineAttachment = require('./attachment');
 const defineLog = require('./log');
 const defineLogType = require('./logType');
+const defineApproval = require('./approval');
 
 /**
  * Sequelize model registry
@@ -41,6 +42,7 @@ function initModels(sequelize) {
   const Attachment = defineAttachment(sequelize);
   const Log = defineLog(sequelize);
   const LogType = defineLogType(sequelize);
+  const Approval = defineApproval(sequelize);
 
   // TB1 -> TB2 (USERS.ID = S_EMPLOYEE1.EMP_CODE)
   User.hasOne(Employee, { as: 'employee', foreignKey: 'EMP_CODE', sourceKey: 'ID' });
@@ -105,6 +107,7 @@ function initModels(sequelize) {
     Attachment,
     Log,
     LogType,
+    Approval,
   };
   return models;
 }

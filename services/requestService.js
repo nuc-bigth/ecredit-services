@@ -25,6 +25,10 @@ const SORT_FIELDS = {
   APPROVED_LIMIT: 'APPROVED_LIMIT_AMOUNT',
   UPDATED_DATE: 'UPDATED_DATE',
 };
+const APPROVAL_ACTION_TYPES = {
+  approve: 'Approved',
+  reject: 'Rejected',
+};
 
 const TEXT_FILTERS = {
   NO: 'NO',
@@ -653,6 +657,8 @@ function normalizeRequestCreditSuggestion(payload) {
     'IS_CLEAR_OUTSTANDING_BALANCE_PROPOSED', 'IS_WITHIN_APPROVED_LIMIT_PROPOSED',
     'IS_BANK_GUARANTEE_PROPOSED', 'PROPOSED_BANK_GUARANTEE_AMOUNT',
     'IS_CASH_DEPOSIT_PROPOSED', 'PROPOSED_CASH_DEPOSIT_AMOUNT',
+    'IS_PERMANENT_PROPOSED', 'IS_TEMPORARY_PROPOSED',
+    'PROPOSED_VALID_FROM', 'PROPOSED_VALID_TO',
   ];
   const update = {};
 
@@ -686,6 +692,7 @@ function normalizeRequestCreditSuggestion(payload) {
   [
     'IS_CLEAR_OUTSTANDING_BALANCE_PROPOSED', 'IS_WITHIN_APPROVED_LIMIT_PROPOSED',
     'IS_BANK_GUARANTEE_PROPOSED', 'IS_CASH_DEPOSIT_PROPOSED',
+    'IS_PERMANENT_PROPOSED', 'IS_TEMPORARY_PROPOSED',
   ].forEach((field) => {
     if (!Object.prototype.hasOwnProperty.call(update, field)) return;
     if (typeof update[field] === 'boolean') return;
@@ -715,6 +722,28 @@ function normalizeRequestCreditSuggestion(payload) {
     update[field] = normalizedAmount;
   });
 
+  ['PROPOSED_VALID_FROM', 'PROPOSED_VALID_TO'].forEach((field) => {
+    if (!Object.prototype.hasOwnProperty.call(update, field)) return;
+    if (update[field] === undefined || update[field] === null || update[field] === '') {
+      update[field] = null;
+      return;
+    }
+    if (typeof update[field] !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(update[field])) {
+      throw validationError(`${field} must use YYYY-MM-DD.`);
+    }
+    const parsedDate = new Date(`${update[field]}T00:00:00Z`);
+    if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== update[field]) {
+      throw validationError(`${field} must be a valid calendar date.`);
+    }
+  });
+
+  if (update.IS_PERMANENT_PROPOSED && !update.PROPOSED_VALID_FROM) {
+    throw validationError('PROPOSED_VALID_FROM is required for a permanent adjustment.');
+  }
+  if (update.IS_TEMPORARY_PROPOSED && (!update.PROPOSED_VALID_FROM || !update.PROPOSED_VALID_TO)) {
+    throw validationError('PROPOSED_VALID_FROM and PROPOSED_VALID_TO are required for a temporary adjustment.');
+  }
+
   return update;
 }
 
@@ -738,6 +767,12 @@ async function updateRequestCreditSuggestion(id, payload, updatedBy) {
     const rating = await Rating.findOne({ where: { ID: update.PROPOSED_RATING_ID, ENABLED: '1' } });
     if (!rating) throw validationError('PROPOSED_RATING_ID must reference an enabled rating.');
   }
+
+  ['PROPOSED_VALID_FROM', 'PROPOSED_VALID_TO'].forEach((field) => {
+    if (typeof update[field] === 'string') {
+      update[field] = databaseDateFromYmd(Request.sequelize, update[field]);
+    }
+  });
 
   await request.update({ ...update, UPDATED_DATE: Request.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy });
   return getRequestById(id);
@@ -956,6 +991,171 @@ async function cancelRequest(id, updatedBy) {
   return affectedRows > 0;
 }
 
+function normalizeApprovalBoolean(value, field) {
+  if (typeof value === 'boolean') return value;
+  if (value === 0 || value === 1) return Boolean(value);
+  if (value === '0' || value === '1') return value === '1';
+  throw validationError(`${field} must be a boolean.`);
+}
+
+function normalizeApprovalAmount(value, field, nullable = false) {
+  if (nullable && (value === null || value === undefined || value === '')) return null;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw validationError(`${field} must be a non-negative number.`);
+  }
+  return amount;
+}
+
+function normalizeApprovalDate(value, field) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw validationError(`${field} must use YYYY-MM-DD.`);
+  }
+  const parsedDate = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== value) {
+    throw validationError(`${field} must be a valid calendar date.`);
+  }
+  return value;
+}
+
+function normalizeApprovalId(value, field, nullable = false) {
+  if (nullable && (value === null || value === undefined || value === '')) return null;
+  if (typeof value !== 'string' || !value.trim()) throw validationError(`${field} is required.`);
+  return value.trim();
+}
+
+function normalizeApprovalUpdate(payload) {
+  const description = typeof payload.DESCRIPTION === 'string' ? payload.DESCRIPTION.trim() : '';
+  if (Buffer.byteLength(description, 'utf8') > MAX_RICH_TEXT_SIZE) {
+    throw validationError('DESCRIPTION exceeds the maximum length.');
+  }
+
+  const update = {
+    DESCRIPTION: description,
+    LIMIT_AMOUNT: normalizeApprovalAmount(payload.LIMIT_AMOUNT, 'LIMIT_AMOUNT', true),
+    TERM_ID: normalizeApprovalId(payload.TERM_ID, 'TERM_ID', true),
+    RATING_ID: normalizeApprovalId(payload.RATING_ID, 'RATING_ID', true),
+    IS_PERMANENT: normalizeApprovalBoolean(payload.IS_PERMANENT, 'IS_PERMANENT'),
+    IS_TEMPORARY: normalizeApprovalBoolean(payload.IS_TEMPORARY, 'IS_TEMPORARY'),
+    VALID_FROM: normalizeApprovalDate(payload.VALID_FROM, 'VALID_FROM'),
+    VALID_TO: normalizeApprovalDate(payload.VALID_TO, 'VALID_TO'),
+    IS_CLEAR_OUTSTANDING_BALANCE: normalizeApprovalBoolean(
+      payload.IS_CLEAR_OUTSTANDING_BALANCE,
+      'IS_CLEAR_OUTSTANDING_BALANCE',
+    ),
+    IS_WITHIN_APPROVED_LIMIT: normalizeApprovalBoolean(
+      payload.IS_WITHIN_APPROVED_LIMIT,
+      'IS_WITHIN_APPROVED_LIMIT',
+    ),
+    IS_BANK_GUARANTEE: normalizeApprovalBoolean(payload.IS_BANK_GUARANTEE, 'IS_BANK_GUARANTEE'),
+    BANK_GUARANTEE_AMOUNT: normalizeApprovalAmount(payload.BANK_GUARANTEE_AMOUNT, 'BANK_GUARANTEE_AMOUNT'),
+    IS_CASH_DEPOSIT: normalizeApprovalBoolean(payload.IS_CASH_DEPOSIT, 'IS_CASH_DEPOSIT'),
+    CASH_DEPOSIT_AMOUNT: normalizeApprovalAmount(payload.CASH_DEPOSIT_AMOUNT, 'CASH_DEPOSIT_AMOUNT'),
+  };
+
+  if (update.IS_PERMANENT && update.IS_TEMPORARY) {
+    throw validationError('IS_PERMANENT and IS_TEMPORARY cannot both be enabled.');
+  }
+  if ((update.IS_PERMANENT || update.IS_TEMPORARY) && !update.VALID_FROM) {
+    throw validationError('VALID_FROM is required for a credit adjustment.');
+  }
+  if (update.IS_TEMPORARY && !update.VALID_TO) {
+    throw validationError('VALID_TO is required for a temporary adjustment.');
+  }
+  if (update.VALID_FROM && update.VALID_TO && update.VALID_TO < update.VALID_FROM) {
+    throw validationError('VALID_TO must be on or after VALID_FROM.');
+  }
+
+  return update;
+}
+
+async function processApprovalAction(id, action, payload, updatedBy, isSystemAdmin = false) {
+  if (!['save', 'approve', 'reject'].includes(action)) {
+    throw validationError('Unsupported approval action.');
+  }
+  if (typeof payload.APPROVAL_ID !== 'string' || !payload.APPROVAL_ID.trim()) {
+    throw validationError('APPROVAL_ID is required.');
+  }
+  const normalizedUpdate = normalizeApprovalUpdate(payload);
+
+  const { Approval } = getModels();
+  const database = getDatabase();
+  const transaction = await database.transaction();
+  try {
+    const pendingApprovals = await database.query(
+      `SELECT TOP 1 TB1.ID
+       FROM APPROVALS AS TB1
+       INNER JOIN APPROVAL_TYPES AS TB2 ON TB2.ID = TB1.APPROVAL_TYPE_ID
+       WHERE TB1.ID = :approvalId
+         AND TB1.REQUEST_ID = :id
+         AND (TB1.APPROVER_ID = :updatedBy OR :isSystemAdmin = 1)
+         AND TB1.ENABLED = '1'
+         AND TB2.ENABLED = '1'
+         AND TB2.NAME = 'Pending'
+       ORDER BY TB1.UPDATED_DATE ASC`,
+      {
+        replacements: {
+          id,
+          approvalId: payload.APPROVAL_ID.trim(),
+          updatedBy,
+          isSystemAdmin: isSystemAdmin ? 1 : 0,
+        },
+        type: QueryTypes.SELECT,
+        transaction,
+      },
+    );
+    const pendingApproval = pendingApprovals[0];
+    if (!pendingApproval) {
+      const error = new Error('There is no pending approval assigned to the authenticated user.');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    const approvalUpdate = {
+      ...normalizedUpdate,
+      VALID_FROM: normalizedUpdate.VALID_FROM
+        ? databaseDateFromYmd(Approval.sequelize, normalizedUpdate.VALID_FROM)
+        : null,
+      VALID_TO: normalizedUpdate.VALID_TO
+        ? databaseDateFromYmd(Approval.sequelize, normalizedUpdate.VALID_TO)
+        : null,
+      UPDATED_BY: updatedBy,
+      UPDATED_DATE: Approval.sequelize.fn('GETDATE'),
+    };
+
+    if (action !== 'save') {
+      const approvalTypeName = APPROVAL_ACTION_TYPES[action];
+      const approvalTypes = await database.query(
+        `SELECT TOP 1 ID
+         FROM APPROVAL_TYPES
+         WHERE ENABLED = '1' AND NAME = :approvalTypeName`,
+        {
+          replacements: { approvalTypeName },
+          type: QueryTypes.SELECT,
+          transaction,
+        },
+      );
+      const approvalType = approvalTypes[0];
+      if (!approvalType) throw validationError(`Approval type ${approvalTypeName} is not configured.`);
+      approvalUpdate.APPROVAL_TYPE_ID = approvalType.ID;
+    }
+
+    const [affectedRows] = await Approval.update(
+      approvalUpdate,
+      { where: { ID: pendingApproval.ID, REQUEST_ID: id, ENABLED: true }, transaction },
+    );
+    if (affectedRows === 0) throw validationError('The pending approval could not be updated.');
+
+    await transaction.commit();
+    return getRequestById(id);
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
 module.exports = {
   listRequests,
   getRequestById,
@@ -966,4 +1166,5 @@ module.exports = {
   updateRequestRequestedDetails,
   cloneRequestData,
   cancelRequest,
+  processApprovalAction,
 };

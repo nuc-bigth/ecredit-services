@@ -27,5 +27,6 @@ router.patch('/:id/scoring-payment', authenticationMiddleware, requestController
 router.patch('/:id/requested-details', authenticationMiddleware, requestController.updateRequestRequestedDetails);
 router.post('/:id/clone-data', authenticationMiddleware, requestController.cloneRequestData);
 router.patch('/:id/cancel', authenticationMiddleware, requestController.cancelRequest);
+router.post('/:id/approval-action', authenticationMiddleware, approvalHistoryController.processApprovalAction);
 
 module.exports = router;
