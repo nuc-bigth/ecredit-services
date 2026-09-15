@@ -17,6 +17,7 @@ router.get('/ratings', authenticationMiddleware, requestMetadataController.listE
 router.get('/:requestId/event-logs', authenticationMiddleware, eventLogController.listRequestEvents);
 router.get('/:requestId/event-logs/:logId', authenticationMiddleware, eventLogController.getRequestEvent);
 router.get('/:requestId/approval-history', authenticationMiddleware, approvalHistoryController.listApprovalHistory);
+router.get('/:requestId/approval-submit-options', authenticationMiddleware, approvalHistoryController.getApprovalSubmitOptions);
 router.get('/:requestId/attachments', authenticationMiddleware, attachmentController.listAttachments);
 router.post('/:requestId/attachments', authenticationMiddleware, attachmentController.uploadAttachments);
 router.get('/:requestId/attachments/:attachmentId/download', authenticationMiddleware, attachmentController.downloadAttachment);
@@ -27,5 +28,6 @@ router.patch('/:id/scoring-payment', authenticationMiddleware, updateRequestScor
 router.post('/:id/clone-data', authenticationMiddleware, cloneRequestData);
 router.patch('/:id/cancel', authenticationMiddleware, requestController.cancelRequest);
 router.post('/:id/approval-action', authenticationMiddleware, approvalHistoryController.processApprovalAction);
+router.post('/:id/submit', authenticationMiddleware, approvalHistoryController.submitRequest);
 
 module.exports = router;

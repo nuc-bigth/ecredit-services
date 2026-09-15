@@ -11,6 +11,40 @@ async function listApprovalHistory(req, res, next) {
   }
 }
 
+async function getApprovalSubmitOptions(req, res, next) {
+  try {
+    const correlationId = res.locals.correlationId || 'N/A';
+    const data = await requestService.getApprovalSubmitOptions(req.params.requestId);
+    if (!data) {
+      const error = new Error(`Request ${req.params.requestId} was not found.`);
+      error.statusCode = 404;
+      error.code = 'RESOURCE_NOT_FOUND';
+      throw error;
+    }
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.status(200).json({ success: true, data, correlationId });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function submitRequest(req, res, next) {
+  try {
+    const correlationId = res.locals.correlationId || 'N/A';
+    const updatedBy = Number(req.user?.profile?.CODE);
+    if (!Number.isInteger(updatedBy)) {
+      const error = new Error('Authenticated user profile is missing a numeric employee code.');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+    const request = await requestService.submitRequest(req.params.id, req.body, updatedBy);
+    res.status(200).json({ success: true, data: request, correlationId });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function processApprovalAction(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
@@ -36,4 +70,4 @@ async function processApprovalAction(req, res, next) {
   }
 }
 
-module.exports = { listApprovalHistory, processApprovalAction };
+module.exports = { listApprovalHistory, getApprovalSubmitOptions, submitRequest, processApprovalAction };

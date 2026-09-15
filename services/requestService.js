@@ -1,11 +1,17 @@
 const { Op, QueryTypes, fn, col, where } = require('sequelize');
+const { randomUUID } = require('crypto');
 const { getModels } = require('../models');
 const { getDatabase } = require('../config/database');
 const attachmentService = require('./attachmentService');
 
 const QUICK_FILTERS = new Set(['rating', 'limit', 'term']);
+const DRAFT_STATUS_ID = 'db8b3768-8466-4974-8dff-4c374b16a639';
 const CANCELLED_STATUS_ID = '31d531f4-0420-4db5-aecf-bcfe4a0e8c4a';
 const COMPLETED_STATUS_ID = '407e23f9-caf5-4c4a-801d-598cf437d1ae';
+const WAITING_APPROVAL_STATUS_ID = '4ba2cdc6-47aa-41bd-99a0-79e1e6b0831b';
+const FINAL_STATUS_ID = '014e8e8b-42cf-4b2f-8cae-e395e26efbcd';
+const REJECTED_STATUS_ID = '94589a22-12e5-4298-aa30-06295acbe1b9';
+const PENDING_APPROVAL_TYPE_ID = 'b4c27a6c-ab7c-4ce5-b885-997f9104c23d';
 const SMALL_CUSTOMER_SIZE_ID = 'd8ce72cf-0228-4293-9699-311eeecb926d';
 const MEDIUM_CUSTOMER_SIZE_ID = '9d9d84c7-8926-4629-b06f-2cb4d434fc33';
 const LARGE_CUSTOMER_SIZE_ID = '4b2d23db-96d6-4cef-b6ae-10a97a8ce1cb';
@@ -464,6 +470,7 @@ async function listApprovalHistory(requestId) {
         (CASE WHEN TB1.IS_TEMPORARY_REQUESTED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS TEMPORARY,
         FORMAT(TB1.REQUESTED_VALID_FROM, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_FROM,
         FORMAT(TB1.REQUESTED_VALID_TO, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_TO,
+        CAST(NULL AS VARCHAR(255)) COLLATE DATABASE_DEFAULT AS PARALLEL_KEYS,
         1 AS SORTING
       FROM REQUESTS AS TB1
       LEFT JOIN S_EMPLOYEE1 AS TB2 ON TB2.EMP_CODE = TB1.REQUESTED_BY
@@ -497,6 +504,7 @@ async function listApprovalHistory(requestId) {
         (CASE WHEN TB1.IS_TEMPORARY_PROPOSED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS TEMPORARY,
         FORMAT(TB1.PROPOSED_VALID_FROM, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_FROM,
         FORMAT(TB1.PROPOSED_VALID_TO, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_TO,
+        CAST(NULL AS VARCHAR(255)) COLLATE DATABASE_DEFAULT AS PARALLEL_KEYS,
         2 AS SORTING
       FROM REQUESTS AS TB1
       LEFT JOIN S_EMPLOYEE1 AS TB2 ON TB2.EMP_CODE = TB1.SUBMITTED_BY
@@ -530,7 +538,8 @@ async function listApprovalHistory(requestId) {
         (CASE WHEN TB1.IS_TEMPORARY = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS TEMPORARY,
         FORMAT(TB1.VALID_FROM, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_FROM,
         FORMAT(TB1.VALID_TO, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_TO,
-        TB2.SORTING + 2 AS SORTING
+        CAST(TB2.PARALLEL_KEYS AS VARCHAR(255)) COLLATE DATABASE_DEFAULT AS PARALLEL_KEYS,
+        TB1.SORTING + 2 AS SORTING
       FROM APPROVALS AS TB1
       LEFT JOIN APPROVER_TYPES AS TB2 ON TB1.APPROVER_TYPE_ID = TB2.ID
       LEFT JOIN APPROVAL_TYPES AS TB3 ON TB3.ID = TB1.APPROVAL_TYPE_ID
@@ -548,10 +557,259 @@ async function listApprovalHistory(requestId) {
   );
 }
 
+async function getApprovalSubmitOptions(requestId) {
+  const database = getDatabase();
+  const [request] = await database.query(
+    `SELECT PROPOSED_LIMIT_AMOUNT
+     FROM REQUESTS
+     WHERE ID = :requestId AND ENABLED = '1'`,
+    { replacements: { requestId }, type: QueryTypes.SELECT },
+  );
+  if (!request) return null;
+
+  const [approvers, approverTypes, defaultApprovers] = await Promise.all([
+    database.query(
+      `SELECT EMP_CODE AS ID, CONCAT(INITIALS, '-', USERNAME) AS NAME
+       FROM S_EMPLOYEE1
+       WHERE WORK_STATUS = '3' AND CURRENT_EMAIL IS NOT NULL
+       ORDER BY INITIALS ASC`,
+      { type: QueryTypes.SELECT },
+    ),
+    database.query(
+      `SELECT ID, NAME, PARALLEL_KEYS, MIN_AMOUNT, MAX_AMOUNT
+       FROM APPROVER_TYPES
+       WHERE ENABLED = '1'
+       ORDER BY SORTING ASC`,
+      { type: QueryTypes.SELECT },
+    ),
+    database.query(
+      `SELECT TB1.ID, TB1.NAME, TB1.DESCRIPTION, TB1.APPROVER_ID, TB1.APPROVER_TYPE_ID
+       FROM APPROVERS AS TB1
+       LEFT JOIN APPROVER_TYPES AS TB2 ON TB1.APPROVER_TYPE_ID = TB2.ID
+       ORDER BY TB2.SORTING ASC`,
+      { type: QueryTypes.SELECT },
+    ),
+  ]);
+
+  return {
+    proposedLimitAmount: request.PROPOSED_LIMIT_AMOUNT,
+    approvers,
+    approverTypes,
+    defaultApprovers,
+  };
+}
+
+function normalizeSubmitSteps(steps) {
+  if (!Array.isArray(steps)) throw validationError('Approval steps must be an array.');
+  const normalized = steps.map((step, index) => {
+    if (!step || typeof step !== 'object' || typeof step.approverTypeId !== 'string' || !step.approverTypeId.trim()) {
+      throw validationError(`Approval step ${index + 1} requires an approver type.`);
+    }
+    if (typeof step.approverId !== 'string' && typeof step.approverId !== 'number') {
+      throw validationError(`Approval step ${index + 1} requires an approver.`);
+    }
+    const approverId = String(step.approverId).trim();
+    if (!approverId) throw validationError(`Approval step ${index + 1} requires an approver.`);
+    if (!Number.isInteger(step.approvalStep) || step.approvalStep < 1) {
+      throw validationError(`Approval step ${index + 1} requires a positive approvalStep.`);
+    }
+    if (!Number.isInteger(step.sorting) || step.sorting < 1) {
+      throw validationError(`Approval step ${index + 1} requires a positive sorting value.`);
+    }
+    return {
+      approverTypeId: step.approverTypeId.trim(),
+      approverId,
+      approvalStep: step.approvalStep,
+      sorting: step.sorting,
+    };
+  });
+
+  const sorting = normalized.map((step) => step.sorting).sort((left, right) => left - right);
+  if (sorting.some((value, index) => value !== index + 1)) {
+    throw validationError('Approval sorting values must be unique and contiguous from 1.');
+  }
+  const approvalSteps = [...new Set(normalized.map((step) => step.approvalStep))].sort((left, right) => left - right);
+  if (approvalSteps.some((value, index) => value !== index + 1)) {
+    throw validationError('Approval step values must be contiguous from 1.');
+  }
+  return normalized;
+}
+
+async function submitRequest(id, command, updatedBy) {
+  if (!command || typeof command !== 'object' || Array.isArray(command)) {
+    throw validationError('A submit command is required.');
+  }
+  const customerUpdate = normalizeRequestCustomerInfo(command.customerInfo ?? {});
+  const creditUpdate = normalizeRequestCreditSuggestion(command.creditSuggestion ?? {});
+  const scoringUpdate = normalizeRequestScoringAndPayment(command.scoringAndPayment ?? {});
+  const requestedUpdate = normalizeRequestRequestedDetails(command.requestedDetails ?? {});
+  const approvalValues = { ...creditUpdate };
+  const requiresApproval = requestedUpdate.IS_TERM_REQUESTED || requestedUpdate.IS_LIMIT_REQUESTED;
+  const normalizedSteps = normalizeSubmitSteps(command.steps ?? []);
+  if (requiresApproval && !normalizedSteps.length) {
+    throw validationError('At least one approval step is required.');
+  }
+  if (!requiresApproval && normalizedSteps.length) {
+    throw validationError('Approval steps are not allowed when credit term and credit limit are not included.');
+  }
+
+  const database = getDatabase();
+  const transaction = await database.transaction();
+  try {
+    const { Request, Rating, Size, Term } = getModels();
+    const request = await Request.findOne({
+      where: { ID: id, ENABLED: true },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!request) throw notFoundError(`Request ${id} was not found.`);
+
+    if (request.STATUS_ID !== DRAFT_STATUS_ID) {
+      throw conflictError('Only Draft requests can be submitted.');
+    }
+
+    const referenceChecks = [
+      Size.findOne({ where: { ID: customerUpdate.CUSTOMER_SIZE_ID, ENABLED: '1' }, transaction }),
+      creditUpdate.PROPOSED_TERM_ID
+        ? Term.findByPk(creditUpdate.PROPOSED_TERM_ID, { transaction }) : Promise.resolve(true),
+      creditUpdate.PROPOSED_RATING_ID
+        ? Rating.findOne({ where: { ID: creditUpdate.PROPOSED_RATING_ID, ENABLED: '1' }, transaction }) : Promise.resolve(true),
+      scoringUpdate.SCORING_RATING_ID
+        ? Rating.findOne({ where: { ID: scoringUpdate.SCORING_RATING_ID, ENABLED: '1' }, transaction }) : Promise.resolve(true),
+      requestedUpdate.REQUESTED_TERM_ID
+        ? Term.findByPk(requestedUpdate.REQUESTED_TERM_ID, { transaction }) : Promise.resolve(true),
+      requestedUpdate.REQUESTED_RATING_ID
+        ? Rating.findOne({ where: { ID: requestedUpdate.REQUESTED_RATING_ID, ENABLED: '1' }, transaction }) : Promise.resolve(true),
+    ];
+    const [size, proposedTerm, proposedRating, scoringRating, requestedTerm, requestedRating] = await Promise.all(referenceChecks);
+    if (!size) throw validationError('CUSTOMER_SIZE_ID must reference an enabled size.');
+    if (!proposedTerm) throw validationError('PROPOSED_TERM_ID must reference a valid term.');
+    if (!proposedRating) throw validationError('PROPOSED_RATING_ID must reference an enabled rating.');
+    if (!scoringRating) throw validationError('SCORING_RATING_ID must reference an enabled rating.');
+    if (!requestedTerm) throw validationError('REQUESTED_TERM_ID must reference a valid term.');
+    if (!requestedRating) throw validationError('REQUESTED_RATING_ID must reference an enabled rating.');
+
+    if (typeof customerUpdate.CUSTOMER_REGISTERED_DATE === 'string') {
+      customerUpdate.CUSTOMER_REGISTERED_DATE = databaseDateFromYmd(
+        Request.sequelize,
+        customerUpdate.CUSTOMER_REGISTERED_DATE,
+      );
+    }
+    ['PROPOSED_VALID_FROM', 'PROPOSED_VALID_TO'].forEach((field) => {
+      if (typeof creditUpdate[field] === 'string') {
+        creditUpdate[field] = databaseDateFromYmd(Request.sequelize, creditUpdate[field]);
+      }
+    });
+    if (typeof scoringUpdate.REF_FINANCIAL_STATEMENT_FY === 'string') {
+      scoringUpdate.REF_FINANCIAL_STATEMENT_FY = databaseDateFromYmd(
+        Request.sequelize,
+        scoringUpdate.REF_FINANCIAL_STATEMENT_FY,
+      );
+    }
+
+    const [approverTypes, approvers, pendingRows] = requiresApproval ? await Promise.all([
+      database.query(
+        'SELECT ID, MIN_AMOUNT, MAX_AMOUNT FROM APPROVER_TYPES WHERE ENABLED = \'1\'',
+        { type: QueryTypes.SELECT, transaction },
+      ),
+      database.query(
+        'SELECT EMP_CODE FROM S_EMPLOYEE1 WHERE WORK_STATUS = \'3\' AND CURRENT_EMAIL IS NOT NULL',
+        { type: QueryTypes.SELECT, transaction },
+      ),
+      database.query(
+        `SELECT TB1.ID FROM APPROVALS AS TB1
+         INNER JOIN APPROVAL_TYPES AS TB2 ON TB2.ID = TB1.APPROVAL_TYPE_ID
+         WHERE TB1.REQUEST_ID = :id AND TB1.ENABLED = '1' AND TB2.NAME = 'Pending'`,
+        { replacements: { id }, type: QueryTypes.SELECT, transaction },
+      ),
+    ]) : [[], [], []];
+    if (pendingRows.length) throw conflictError('This request already has pending approvals.');
+
+    const typeIds = new Set(approverTypes.map((type) => String(type.ID)));
+    const approverIds = new Set(approvers.map((approver) => String(approver.EMP_CODE)));
+    normalizedSteps.forEach((step, index) => {
+      if (!typeIds.has(step.approverTypeId)) throw validationError(`Approval step ${index + 1} uses an invalid approver type.`);
+      if (!approverIds.has(step.approverId)) throw validationError(`Approval step ${index + 1} uses an invalid approver.`);
+    });
+
+    await request.update({
+      ...customerUpdate,
+      ...creditUpdate,
+      ...scoringUpdate,
+      ...requestedUpdate,
+      STATUS_ID: requiresApproval ? WAITING_APPROVAL_STATUS_ID : COMPLETED_STATUS_ID,
+      SUBMITTED_DATE: Request.sequelize.fn('GETDATE'),
+      SUBMITTED_BY: updatedBy,
+      UPDATED_BY: updatedBy,
+      UPDATED_DATE: Request.sequelize.fn('GETDATE'),
+    }, { transaction });
+
+    for (const step of normalizedSteps) {
+      await database.query(
+        `INSERT INTO APPROVALS (
+          ID, REQUEST_ID, APPROVER_TYPE_ID, APPROVAL_TYPE_ID, APPROVER_ID, DESCRIPTION,
+          LIMIT_AMOUNT, TERM_ID, RATING_ID, IS_PERMANENT, IS_TEMPORARY, VALID_FROM, VALID_TO,
+          IS_CLEAR_OUTSTANDING_BALANCE, IS_WITHIN_APPROVED_LIMIT, IS_BANK_GUARANTEE,
+          BANK_GUARANTEE_AMOUNT, IS_CASH_DEPOSIT, CASH_DEPOSIT_AMOUNT, APPROVAL_STEP, SORTING,
+          CREATED_BY, CREATED_DATE, UPDATED_BY, UPDATED_DATE, ENABLED
+        ) VALUES (
+          :approvalId, :requestId, :approverTypeId, :approvalTypeId, :approverId, :description,
+          :limitAmount, :termId, :ratingId, :isPermanent, :isTemporary, :validFrom, :validTo,
+          :clearOutstanding, :withinLimit, :bankGuarantee, :bankGuaranteeAmount,
+          :cashDeposit, :cashDepositAmount, :approvalStep, :sorting,
+          :updatedBy, GETDATE(), :updatedBy, GETDATE(), '1'
+        )`,
+        {
+          replacements: {
+            approvalId: randomUUID(), requestId: id, approverTypeId: step.approverTypeId,
+            approvalTypeId: PENDING_APPROVAL_TYPE_ID, approverId: step.approverId, description: '',
+            limitAmount: requestedUpdate.IS_LIMIT_REQUESTED ? approvalValues.PROPOSED_LIMIT_AMOUNT : null,
+            termId: requestedUpdate.IS_TERM_REQUESTED ? approvalValues.PROPOSED_TERM_ID : null,
+            ratingId: approvalValues.PROPOSED_RATING_ID, isPermanent: approvalValues.IS_PERMANENT_PROPOSED,
+            isTemporary: approvalValues.IS_TEMPORARY_PROPOSED, validFrom: approvalValues.PROPOSED_VALID_FROM,
+            validTo: approvalValues.PROPOSED_VALID_TO,
+            clearOutstanding: approvalValues.IS_CLEAR_OUTSTANDING_BALANCE_PROPOSED,
+            withinLimit: approvalValues.IS_WITHIN_APPROVED_LIMIT_PROPOSED,
+            bankGuarantee: approvalValues.IS_BANK_GUARANTEE_PROPOSED,
+            bankGuaranteeAmount: approvalValues.IS_BANK_GUARANTEE_PROPOSED
+              ? approvalValues.PROPOSED_BANK_GUARANTEE_AMOUNT : null,
+            cashDeposit: approvalValues.IS_CASH_DEPOSIT_PROPOSED,
+            cashDepositAmount: approvalValues.IS_CASH_DEPOSIT_PROPOSED
+              ? approvalValues.PROPOSED_CASH_DEPOSIT_AMOUNT : null,
+            approvalStep: step.approvalStep, sorting: step.sorting, updatedBy,
+          },
+          type: QueryTypes.INSERT,
+          transaction,
+        },
+      );
+    }
+
+    await transaction.commit();
+    return getRequestById(id);
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
 function validationError(message) {
   const error = new Error(message);
   error.statusCode = 400;
   error.code = 'VALIDATION_ERROR';
+  return error;
+}
+
+function notFoundError(message) {
+  const error = new Error(message);
+  error.statusCode = 404;
+  error.code = 'RESOURCE_NOT_FOUND';
+  return error;
+}
+
+function conflictError(message) {
+  const error = new Error(message);
+  error.statusCode = 409;
+  error.code = 'CONFLICT';
   return error;
 }
 
@@ -869,6 +1127,7 @@ function normalizeRequestedAmount(value, field) {
 
 function normalizeRequestRequestedDetails(payload) {
   const fields = [
+    'IS_TERM_REQUESTED', 'IS_LIMIT_REQUESTED',
     'REQUESTED_SALES_GROUP', 'REQUESTED_CUSTOMER_TYPE', 'REQUESTED_LIMIT_AMOUNT', 'REQUESTED_TERM_ID',
     'REQUESTED_RATING_ID', 'REQUESTED_SELLING_TYPE', 'REQUESTED_EXPECTED_SALES_AMOUNT',
     'REQUESTED_DELIVERY_FREQUENCY', 'REQUESTED_ADDITIONAL_EXPECTED_AMOUNT', 'REQUESTED_NOTES',
@@ -878,6 +1137,13 @@ function normalizeRequestRequestedDetails(payload) {
     if (Object.prototype.hasOwnProperty.call(payload, field)) update[field] = payload[field];
   });
   if (!Object.keys(update).length) throw validationError('No requested detail fields were supplied.');
+
+  ['IS_TERM_REQUESTED', 'IS_LIMIT_REQUESTED'].forEach((field) => {
+    if (!Object.prototype.hasOwnProperty.call(update, field)) {
+      throw validationError(`${field} is required.`);
+    }
+    update[field] = normalizeApprovalBoolean(update[field], field);
+  });
 
   ['REQUESTED_SALES_GROUP', 'REQUESTED_CUSTOMER_TYPE', 'REQUESTED_TERM_ID', 'REQUESTED_RATING_ID',
     'REQUESTED_SELLING_TYPE', 'REQUESTED_DELIVERY_FREQUENCY', 'REQUESTED_NOTES']
@@ -1079,27 +1345,47 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
   }
   const normalizedUpdate = normalizeApprovalUpdate(payload);
 
-  const { Approval } = getModels();
+  const { Approval, Request } = getModels();
   const database = getDatabase();
   const transaction = await database.transaction();
   try {
     const pendingApprovals = await database.query(
       `SELECT TOP 1 TB1.ID
        FROM APPROVALS AS TB1
-       INNER JOIN APPROVAL_TYPES AS TB2 ON TB2.ID = TB1.APPROVAL_TYPE_ID
-       WHERE TB1.ID = :approvalId
-         AND TB1.REQUEST_ID = :id
-         AND (TB1.APPROVER_ID = :updatedBy OR :isSystemAdmin = 1)
+       INNER JOIN APPROVAL_TYPES AS TB2
+         ON CONVERT(VARCHAR(36), TB2.ID) COLLATE DATABASE_DEFAULT
+          = CONVERT(VARCHAR(36), TB1.APPROVAL_TYPE_ID) COLLATE DATABASE_DEFAULT
+       INNER JOIN REQUESTS AS TB3
+         ON CONVERT(VARCHAR(36), TB3.ID) COLLATE DATABASE_DEFAULT
+          = CONVERT(VARCHAR(36), TB1.REQUEST_ID) COLLATE DATABASE_DEFAULT
+       WHERE CONVERT(VARCHAR(36), TB1.ID) COLLATE DATABASE_DEFAULT
+           = CONVERT(VARCHAR(36), :approvalId) COLLATE DATABASE_DEFAULT
+         AND CONVERT(VARCHAR(36), TB1.REQUEST_ID) COLLATE DATABASE_DEFAULT
+           = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
+         AND (TRY_CONVERT(BIGINT, TB1.APPROVER_ID) = TRY_CONVERT(BIGINT, :updatedBy) OR :isSystemAdmin = 1)
          AND TB1.ENABLED = '1'
          AND TB2.ENABLED = '1'
-         AND TB2.NAME = 'Pending'
-       ORDER BY TB1.UPDATED_DATE ASC`,
+         AND TB2.NAME COLLATE DATABASE_DEFAULT = 'Pending' COLLATE DATABASE_DEFAULT
+         AND CONVERT(VARCHAR(36), TB3.STATUS_ID) COLLATE DATABASE_DEFAULT
+           = CONVERT(VARCHAR(36), :waitingStatusId) COLLATE DATABASE_DEFAULT
+         AND TB1.APPROVAL_STEP = (
+           SELECT MIN(TB4.APPROVAL_STEP)
+           FROM APPROVALS AS TB4
+           WHERE CONVERT(VARCHAR(36), TB4.REQUEST_ID) COLLATE DATABASE_DEFAULT
+               = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
+             AND CONVERT(VARCHAR(36), TB4.APPROVAL_TYPE_ID) COLLATE DATABASE_DEFAULT
+               = CONVERT(VARCHAR(36), :pendingApprovalTypeId) COLLATE DATABASE_DEFAULT
+             AND TB4.ENABLED = '1'
+         )
+       ORDER BY TB1.SORTING ASC`,
       {
         replacements: {
           id,
           approvalId: payload.APPROVAL_ID.trim(),
           updatedBy,
           isSystemAdmin: isSystemAdmin ? 1 : 0,
+          waitingStatusId: WAITING_APPROVAL_STATUS_ID,
+          pendingApprovalTypeId: PENDING_APPROVAL_TYPE_ID,
         },
         type: QueryTypes.SELECT,
         transaction,
@@ -1130,7 +1416,8 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
       const approvalTypes = await database.query(
         `SELECT TOP 1 ID
          FROM APPROVAL_TYPES
-         WHERE ENABLED = '1' AND NAME = :approvalTypeName`,
+         WHERE ENABLED = '1'
+           AND NAME COLLATE DATABASE_DEFAULT = :approvalTypeName COLLATE DATABASE_DEFAULT`,
         {
           replacements: { approvalTypeName },
           type: QueryTypes.SELECT,
@@ -1148,6 +1435,42 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
     );
     if (affectedRows === 0) throw validationError('The pending approval could not be updated.');
 
+    if (action === 'reject') {
+      await Request.update(
+        {
+          STATUS_ID: REJECTED_STATUS_ID,
+          UPDATED_BY: updatedBy,
+          UPDATED_DATE: Request.sequelize.fn('GETDATE'),
+        },
+        { where: { ID: id, ENABLED: true }, transaction },
+      );
+    } else if (action === 'approve') {
+      const [pendingCount] = await database.query(
+        `SELECT COUNT(1) AS TOTAL
+         FROM APPROVALS
+         WHERE CONVERT(VARCHAR(36), REQUEST_ID) COLLATE DATABASE_DEFAULT
+             = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
+           AND CONVERT(VARCHAR(36), APPROVAL_TYPE_ID) COLLATE DATABASE_DEFAULT
+             = CONVERT(VARCHAR(36), :pendingApprovalTypeId) COLLATE DATABASE_DEFAULT
+           AND ENABLED = '1'`,
+        {
+          replacements: { id, pendingApprovalTypeId: PENDING_APPROVAL_TYPE_ID },
+          type: QueryTypes.SELECT,
+          transaction,
+        },
+      );
+      if (Number(pendingCount?.TOTAL) === 0) {
+        await Request.update(
+          {
+            STATUS_ID: FINAL_STATUS_ID,
+            UPDATED_BY: updatedBy,
+            UPDATED_DATE: Request.sequelize.fn('GETDATE'),
+          },
+          { where: { ID: id, ENABLED: true }, transaction },
+        );
+      }
+    }
+
     await transaction.commit();
     return getRequestById(id);
   } catch (error) {
@@ -1160,6 +1483,8 @@ module.exports = {
   listRequests,
   getRequestById,
   listApprovalHistory,
+  getApprovalSubmitOptions,
+  submitRequest,
   updateRequestCustomerInfo,
   updateRequestCreditSuggestion,
   updateRequestScoringAndPayment,
