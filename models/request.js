@@ -18,6 +18,7 @@ module.exports = (sequelize) =>
       REQUESTED_DELIVERY_FREQUENCY: DataTypes.STRING(50),
       REQUESTED_ADDITIONAL_EXPECTED_AMOUNT: DataTypes.DECIMAL(18, 4),
       REQUESTED_NOTES: DataTypes.TEXT,
+      BDS_NOTES: DataTypes.TEXT,
       CRM_NO: DataTypes.STRING,
       SOLD_TO: DataTypes.STRING,
       CUSTOMER_TAX_NO: DataTypes.STRING,

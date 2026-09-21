@@ -285,6 +285,7 @@ function mapRequest(request) {
     REQUESTED_ADDITIONAL_EXPECTED_AMOUNT: request.REQUESTED_ADDITIONAL_EXPECTED_AMOUNT === null || request.REQUESTED_ADDITIONAL_EXPECTED_AMOUNT === undefined
       ? null : toNumber(request.REQUESTED_ADDITIONAL_EXPECTED_AMOUNT),
     REQUESTED_NOTES: request.REQUESTED_NOTES || '',
+    BDS_NOTES: request.BDS_NOTES || '',
     CRM_NO: request.CRM_NO || '',
     SUBJECT: request.DESCRIPTION || '',
     PROPOSED_DISPLAYED_NOTES: request.PROPOSED_DISPLAYED_NOTES || '',
@@ -481,6 +482,8 @@ async function listApprovalHistory(requestId) {
         'Requester' COLLATE DATABASE_DEFAULT AS APPROVER_TYPE_NAME,
         'Requested' COLLATE DATABASE_DEFAULT AS APPROVAL_TYPE_NAME,
         CAST(NULL AS VARCHAR(36)) COLLATE DATABASE_DEFAULT AS APPROVAL_TYPE_ID,
+        CAST(0 AS BIT) AS ALLOW_BACKWARD,
+        CAST(1 AS BIT) AS CURRENT_CYCLE,
         'No' COLLATE DATABASE_DEFAULT AS INCLUDED_CLEAR_OUTSTANDING_BALANCE,
         'No' COLLATE DATABASE_DEFAULT AS INCLUDED_WITHIN_APPROVED_LIMIT,
         'No' COLLATE DATABASE_DEFAULT AS INCLUDED_BANK_GUARANTEE,
@@ -515,6 +518,8 @@ async function listApprovalHistory(requestId) {
         (SELECT TOP(1) NAME FROM APPROVER_TYPES WHERE ID = 'fca8c4fa-51e8-4c7d-95ac-274d62ba5d7f') COLLATE DATABASE_DEFAULT AS APPROVER_TYPE_NAME,
         'Suggested' COLLATE DATABASE_DEFAULT AS APPROVAL_TYPE_NAME,
         CAST(NULL AS VARCHAR(36)) COLLATE DATABASE_DEFAULT AS APPROVAL_TYPE_ID,
+        CAST(0 AS BIT) AS ALLOW_BACKWARD,
+        CAST(1 AS BIT) AS CURRENT_CYCLE,
         (CASE WHEN TB1.IS_CLEAR_OUTSTANDING_BALANCE_PROPOSED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS INCLUDED_CLEAR_OUTSTANDING_BALANCE,
         (CASE WHEN TB1.IS_WITHIN_APPROVED_LIMIT_PROPOSED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS INCLUDED_WITHIN_APPROVED_LIMIT,
         (CASE WHEN TB1.IS_BANK_GUARANTEE_PROPOSED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS INCLUDED_BANK_GUARANTEE,
@@ -549,6 +554,8 @@ async function listApprovalHistory(requestId) {
         ISNULL(TB2.NAME, '') COLLATE DATABASE_DEFAULT AS APPROVER_TYPE_NAME,
         ISNULL(TB3.NAME, '') COLLATE DATABASE_DEFAULT AS APPROVAL_TYPE_NAME,
         CAST(TB1.APPROVAL_TYPE_ID AS VARCHAR(36)) COLLATE DATABASE_DEFAULT AS APPROVAL_TYPE_ID,
+        CAST(ISNULL(TB2.ALLOW_BACKWARD, 0) AS BIT) AS ALLOW_BACKWARD,
+        CAST(CASE WHEN TB8.SUBMITTED_DATE IS NULL OR TB1.CREATED_DATE >= TB8.SUBMITTED_DATE THEN 1 ELSE 0 END AS BIT) AS CURRENT_CYCLE,
         (CASE WHEN TB1.IS_CLEAR_OUTSTANDING_BALANCE = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS INCLUDED_CLEAR_OUTSTANDING_BALANCE,
         (CASE WHEN TB1.IS_WITHIN_APPROVED_LIMIT = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS INCLUDED_WITHIN_APPROVED_LIMIT,
         (CASE WHEN TB1.IS_BANK_GUARANTEE = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS INCLUDED_BANK_GUARANTEE,
@@ -568,6 +575,9 @@ async function listApprovalHistory(requestId) {
       FROM APPROVALS AS TB1
       LEFT JOIN APPROVER_TYPES AS TB2 ON TB1.APPROVER_TYPE_ID = TB2.ID
       LEFT JOIN APPROVAL_TYPES AS TB3 ON TB3.ID = TB1.APPROVAL_TYPE_ID
+      LEFT JOIN REQUESTS AS TB8
+        ON CONVERT(VARCHAR(36), TB8.ID) COLLATE DATABASE_DEFAULT
+         = CONVERT(VARCHAR(36), TB1.REQUEST_ID) COLLATE DATABASE_DEFAULT
       LEFT JOIN S_EMPLOYEE1 AS TB4 ON TB4.EMP_CODE = TB1.APPROVER_ID
       LEFT JOIN S_EMPLOYEE1 AS TB5 ON TB5.EMP_CODE = TB1.UPDATED_BY
       LEFT JOIN TERMS AS TB6 ON TB6.ID = TB1.TERM_ID
@@ -601,7 +611,7 @@ async function getApprovalSubmitOptions(requestId) {
       { type: QueryTypes.SELECT },
     ),
     database.query(
-      `SELECT ID, NAME, PARALLEL_KEYS, MIN_AMOUNT, MAX_AMOUNT
+      `SELECT ID, NAME, PARALLEL_KEYS, MIN_AMOUNT, MAX_AMOUNT, ALLOW_BACKWARD
        FROM APPROVER_TYPES
        WHERE ENABLED = '1'
        ORDER BY SORTING ASC`,
@@ -743,9 +753,19 @@ async function submitRequest(id, command, updatedBy) {
       ),
       database.query(
         `SELECT TB1.ID FROM APPROVALS AS TB1
-         INNER JOIN APPROVAL_TYPES AS TB2 ON TB2.ID = TB1.APPROVAL_TYPE_ID
-         WHERE TB1.REQUEST_ID = :id AND TB1.ENABLED = '1' AND TB2.NAME = 'Pending'`,
-        { replacements: { id }, type: QueryTypes.SELECT, transaction },
+         INNER JOIN APPROVAL_TYPES AS TB2
+           ON CONVERT(VARCHAR(36), TB2.ID) COLLATE DATABASE_DEFAULT
+            = CONVERT(VARCHAR(36), TB1.APPROVAL_TYPE_ID) COLLATE DATABASE_DEFAULT
+         INNER JOIN REQUESTS AS TB3
+           ON CONVERT(VARCHAR(36), TB3.ID) COLLATE DATABASE_DEFAULT
+            = CONVERT(VARCHAR(36), TB1.REQUEST_ID) COLLATE DATABASE_DEFAULT
+         WHERE CONVERT(VARCHAR(36), TB1.REQUEST_ID) COLLATE DATABASE_DEFAULT
+             = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
+           AND TB1.ENABLED = '1'
+           AND TB2.NAME COLLATE DATABASE_DEFAULT = 'Pending' COLLATE DATABASE_DEFAULT
+           AND CONVERT(VARCHAR(36), TB3.STATUS_ID) COLLATE DATABASE_DEFAULT
+             <> CONVERT(VARCHAR(36), :draftStatusId) COLLATE DATABASE_DEFAULT`,
+        { replacements: { id, draftStatusId: DRAFT_STATUS_ID }, type: QueryTypes.SELECT, transaction },
       ),
     ]) : [[], [], []];
     if (pendingRows.length) throw conflictError('This request already has pending approvals.');
@@ -1155,7 +1175,7 @@ function normalizeRequestRequestedDetails(payload) {
     'IS_TERM_REQUESTED', 'IS_LIMIT_REQUESTED',
     'REQUESTED_SALES_GROUP', 'REQUESTED_CUSTOMER_TYPE', 'REQUESTED_LIMIT_AMOUNT', 'REQUESTED_TERM_ID',
     'REQUESTED_RATING_ID', 'REQUESTED_SELLING_TYPE', 'REQUESTED_EXPECTED_SALES_AMOUNT',
-    'REQUESTED_DELIVERY_FREQUENCY', 'REQUESTED_ADDITIONAL_EXPECTED_AMOUNT', 'REQUESTED_NOTES',
+    'REQUESTED_DELIVERY_FREQUENCY', 'REQUESTED_ADDITIONAL_EXPECTED_AMOUNT', 'REQUESTED_NOTES', 'BDS_NOTES',
   ];
   const update = {};
   fields.forEach((field) => {
@@ -1171,13 +1191,16 @@ function normalizeRequestRequestedDetails(payload) {
   });
 
   ['REQUESTED_SALES_GROUP', 'REQUESTED_CUSTOMER_TYPE', 'REQUESTED_TERM_ID', 'REQUESTED_RATING_ID',
-    'REQUESTED_SELLING_TYPE', 'REQUESTED_DELIVERY_FREQUENCY', 'REQUESTED_NOTES']
+    'REQUESTED_SELLING_TYPE', 'REQUESTED_DELIVERY_FREQUENCY', 'REQUESTED_NOTES', 'BDS_NOTES']
     .forEach((field) => {
       if (!Object.prototype.hasOwnProperty.call(update, field)) return;
       if (update[field] === null) update[field] = '';
-      const maximumLength = field === 'REQUESTED_DELIVERY_FREQUENCY' ? 50 : 2048;
+      const maximumLength = field === 'REQUESTED_DELIVERY_FREQUENCY' ? 50 : field === 'BDS_NOTES' ? MAX_RICH_TEXT_SIZE : 2048;
       if (typeof update[field] !== 'string' || update[field].length > maximumLength) {
         throw validationError(`${field} must be a string no longer than ${maximumLength} characters.`);
+      }
+      if (field === 'BDS_NOTES' && Buffer.byteLength(update[field], 'utf8') > MAX_RICH_TEXT_SIZE) {
+        throw validationError(`${field} exceeds the maximum length.`);
       }
     });
   ['REQUESTED_LIMIT_AMOUNT', 'REQUESTED_EXPECTED_SALES_AMOUNT', 'REQUESTED_ADDITIONAL_EXPECTED_AMOUNT']
@@ -1362,18 +1385,28 @@ function normalizeApprovalUpdate(payload) {
 }
 
 async function processApprovalAction(id, action, payload, updatedBy, isSystemAdmin = false) {
-  if (!['save', 'approve', 'reject'].includes(action)) {
+  if (!['save', 'approve', 'reject', 'backward'].includes(action)) {
     throw validationError('Unsupported approval action.');
   }
   if (typeof payload.APPROVAL_ID !== 'string' || !payload.APPROVAL_ID.trim()) {
     throw validationError('APPROVAL_ID is required.');
   }
-  const normalizedUpdate = normalizeApprovalUpdate(payload);
+  const normalizedUpdate = action === 'backward' ? null : normalizeApprovalUpdate(payload);
 
   const { Approval, Request } = getModels();
   const database = getDatabase();
   const transaction = await database.transaction();
   try {
+    const backwardPermissionClause = action === 'backward'
+      ? `AND EXISTS (
+           SELECT 1
+           FROM APPROVER_TYPES AS TB5
+           WHERE CONVERT(VARCHAR(36), TB5.ID) COLLATE DATABASE_DEFAULT
+               = CONVERT(VARCHAR(36), TB1.APPROVER_TYPE_ID) COLLATE DATABASE_DEFAULT
+             AND TB5.ENABLED = '1'
+             AND TB5.ALLOW_BACKWARD = '1'
+         )`
+      : '';
     const pendingApprovals = await database.query(
       `SELECT TOP 1 TB1.ID
        FROM APPROVALS AS TB1
@@ -1391,6 +1424,8 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
          AND TB1.ENABLED = '1'
          AND TB2.ENABLED = '1'
          AND TB2.NAME COLLATE DATABASE_DEFAULT = 'Pending' COLLATE DATABASE_DEFAULT
+         ${backwardPermissionClause}
+         AND TB1.CREATED_DATE >= TB3.SUBMITTED_DATE
          AND CONVERT(VARCHAR(36), TB3.STATUS_ID) COLLATE DATABASE_DEFAULT
            = CONVERT(VARCHAR(36), :waitingStatusId) COLLATE DATABASE_DEFAULT
          AND TB1.APPROVAL_STEP = (
@@ -1422,6 +1457,19 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
       error.statusCode = 403;
       error.code = 'FORBIDDEN';
       throw error;
+    }
+
+    if (action === 'backward') {
+      await Request.update(
+        {
+          STATUS_ID: DRAFT_STATUS_ID,
+          UPDATED_BY: updatedBy,
+          UPDATED_DATE: Request.sequelize.fn('GETDATE'),
+        },
+        { where: { ID: id, ENABLED: true }, transaction },
+      );
+      await transaction.commit();
+      return getRequestById(id);
     }
 
     const approvalUpdate = {
