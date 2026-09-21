@@ -295,6 +295,10 @@ function mapRequest(request) {
     SCORING_GROWTH: request.SCORING_GROWTH?.toString() || '-',
     SCORING_LIQUIDITY: request.SCORING_LIQUIDITY?.toString() || '-',
     SCORING_LEVERAGE: request.SCORING_LEVERAGE?.toString() || '-',
+    IS_SCORING_GOVERMENT: Boolean(request.IS_SCORING_GOVERMENT),
+    IS_SCORING_OTHER: Boolean(request.IS_SCORING_OTHER),
+    SCORING_NOTES: request.SCORING_NOTES || '',
+    IS_SCORING_NA: Boolean(request.IS_SCORING_NA),
     EXISTING_PROFITABILITY: request.EXISTING_PROFITABILITY?.toString() || '-',
     EXISTING_GROWTH: request.EXISTING_GROWTH?.toString() || '-',
     EXISTING_LIQUIDITY: request.EXISTING_LIQUIDITY?.toString() || '-',
@@ -1081,6 +1085,36 @@ async function updateRequestCreditSuggestion(id, payload, updatedBy) {
   return getRequestById(id);
 }
 
+const SCORING_RATING_IDS = Object.freeze({
+  NA: 'b56fb622-c57a-43dc-b0ad-afa50dad6c67',
+  A: '7f6c7c4f-49ff-4bd2-9288-2d632e2c13a3',
+  D: '1cc1976d-fc34-4e96-9c26-06fd03adaf7a',
+  C: 'd342aa8d-a17f-4599-96d3-9b8687c58e11',
+  B: '6ae7d3ee-8583-4404-8cda-f1222c42d77c',
+  NO_RISK: '6692417b-a711-49c9-9015-fb232ca7d737',
+});
+
+function normalizeBooleanField(value, field) {
+  if (typeof value === 'boolean') return value;
+  if (value === 0 || value === 1 || value === '0' || value === '1') return value === 1 || value === '1';
+  throw validationError(`${field} must be a boolean.`);
+}
+
+function deriveScoringRating(scores) {
+  const total = scores.reduce((sum, value, index) => {
+    const score = value === undefined || value === null || String(value).trim() === '' || value === '-' ? 0 : Number(value);
+    if (!Number.isFinite(score) || score < 0) {
+      throw validationError(`SCORING_${['PROFITABILITY', 'GROWTH', 'LIQUIDITY', 'LEVERAGE'][index]} must be a non-negative number.`);
+    }
+    return sum + score;
+  }, 0);
+  if (total <= 30) return SCORING_RATING_IDS.D;
+  if (total <= 50) return SCORING_RATING_IDS.C;
+  if (total <= 70) return SCORING_RATING_IDS.B;
+  if (total <= 90) return SCORING_RATING_IDS.A;
+  throw validationError('The total scoring value must not exceed 90.');
+}
+
 function normalizeRequestScoringAndPayment(payload) {
   const scoringFields = [
     'SCORING_PROFITABILITY', 'SCORING_GROWTH', 'SCORING_LIQUIDITY', 'SCORING_LEVERAGE',
@@ -1091,7 +1125,8 @@ function normalizeRequestScoringAndPayment(payload) {
   ];
   const update = {};
 
-  [...scoringFields, 'SCORING_RATING_ID', ...paymentFields, 'REF_FINANCIAL_STATEMENT_FY'].forEach((field) => {
+  const categoryFields = ['IS_SCORING_GOVERMENT', 'IS_SCORING_OTHER', 'IS_SCORING_NA'];
+  [...scoringFields, 'SCORING_RATING_ID', ...categoryFields, 'SCORING_NOTES', ...paymentFields, 'REF_FINANCIAL_STATEMENT_FY'].forEach((field) => {
     if (Object.prototype.hasOwnProperty.call(payload, field)) update[field] = payload[field];
   });
 
@@ -1104,8 +1139,27 @@ function normalizeRequestScoringAndPayment(payload) {
       ? '-' : String(value);
   });
 
-  if (Object.prototype.hasOwnProperty.call(update, 'SCORING_RATING_ID')) {
-    update.SCORING_RATING_ID = normalizeCreditSuggestionId(update.SCORING_RATING_ID, 'SCORING_RATING_ID');
+  categoryFields.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(update, field)) update[field] = normalizeBooleanField(update[field], field);
+  });
+
+  const activeCategories = categoryFields.filter((field) => update[field] === true);
+  if (activeCategories.length > 1) throw validationError('Only one scoring category can be selected.');
+
+  if (Object.prototype.hasOwnProperty.call(update, 'SCORING_NOTES')) {
+    update.SCORING_NOTES = update.SCORING_NOTES === null || update.SCORING_NOTES === undefined
+      ? '' : String(update.SCORING_NOTES).trim();
+  }
+  const scoringNotesText = String(update.SCORING_NOTES || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+  if ((update.IS_SCORING_OTHER || update.IS_SCORING_NA) && !scoringNotesText) {
+    throw validationError('SCORING_NOTES is required when Others or N/A is selected.');
+  }
+
+  if (activeCategories.length) {
+    scoringFields.forEach((field) => { update[field] = '0'; });
+    update.SCORING_RATING_ID = update.IS_SCORING_NA ? SCORING_RATING_IDS.NA : SCORING_RATING_IDS.NO_RISK;
+  } else {
+    update.SCORING_RATING_ID = deriveScoringRating(scoringFields.map((field) => update[field]));
   }
 
   if (Object.prototype.hasOwnProperty.call(update, 'REF_FINANCIAL_STATEMENT_FY')) {
@@ -1237,6 +1291,7 @@ const CLONE_FIELDS = [
   'CUSTOMER_TAX_NO', 'CUSTOMER_REGISTERED_DATE', 'CUSTOMER_REGISTERED_CAPITAL_AMOUNT', 'CUSTOMER_SIZE_ID',
   'CUSTOMER_BUSINESS_TYPE_INTER', 'CUSTOMER_CUSTOMER_TYPE_INTER', 'CUSTOMER_DIRECTORS', 'CUSTOMER_SHAREHOLDERS',
   'SCORING_PROFITABILITY', 'SCORING_GROWTH', 'SCORING_LIQUIDITY', 'SCORING_LEVERAGE', 'SCORING_RATING_ID',
+  'IS_SCORING_GOVERMENT', 'IS_SCORING_OTHER', 'SCORING_NOTES', 'IS_SCORING_NA',
   'EXISTING_PROFITABILITY', 'EXISTING_GROWTH', 'EXISTING_LIQUIDITY', 'EXISTING_LEVERAGE',
   'IS_PAY_IN_ADVANCE', 'IS_PAY_ON_TIME', 'IS_OVERDUE_LT_10_DAYS', 'IS_OVERDUE_GT_10_DAYS', 'IS_OVERDUE_GT_30_DAYS',
   'IS_OVERDUE_GT_60_DAYS', 'IS_OVERDUE_GT_90_DAYS', 'PROPOSED_DISPLAYED_NOTES', 'PROPOSED_NOTES',
@@ -1460,6 +1515,17 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
     }
 
     if (action === 'backward') {
+      await Approval.update(
+        {
+          ENABLED: false,
+          UPDATED_BY: updatedBy,
+          UPDATED_DATE: Approval.sequelize.fn('GETDATE'),
+        },
+        {
+          where: { REQUEST_ID: id, ENABLED: true },
+          transaction,
+        },
+      );
       await Request.update(
         {
           STATUS_ID: DRAFT_STATUS_ID,

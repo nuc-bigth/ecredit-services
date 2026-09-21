@@ -156,6 +156,35 @@ describe('requestService.processApprovalAction', () => {
     expect(transaction.commit).toHaveBeenCalledTimes(1);
   });
 
+  it('disables all enabled approvals before moving the request back to draft', async () => {
+    database.query.mockResolvedValueOnce([{ ID: approvalId }]);
+
+    await requestService.processApprovalAction(
+      requestId,
+      'backward',
+      approvalPayload('backward'),
+      updatedBy,
+    );
+
+    expect(approvalUpdate).toHaveBeenCalledWith(
+      {
+        ENABLED: false,
+        UPDATED_BY: updatedBy,
+        UPDATED_DATE: { fn: 'GETDATE' },
+      },
+      {
+        where: { REQUEST_ID: requestId, ENABLED: true },
+        transaction,
+      },
+    );
+    expect(requestUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ STATUS_ID: 'db8b3768-8466-4974-8dff-4c374b16a639' }),
+      expect.objectContaining({ where: { ID: requestId, ENABLED: true }, transaction }),
+    );
+    expect(transaction.commit).toHaveBeenCalledTimes(1);
+    expect(transaction.rollback).not.toHaveBeenCalled();
+  });
+
   it('rejects the request while retaining other pending approvals', async () => {
     database.query
       .mockResolvedValueOnce([{ ID: approvalId }])
