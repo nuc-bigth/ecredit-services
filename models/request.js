@@ -68,6 +68,7 @@ module.exports = (sequelize) =>
       SCORING_RATING_ID: DataTypes.STRING,
       IS_PAY_IN_ADVANCE: DataTypes.BOOLEAN,
       IS_PAY_ON_TIME: DataTypes.BOOLEAN,
+      IS_OVERDUE_LT_10_DAYS: DataTypes.BOOLEAN,
       IS_OVERDUE_GT_10_DAYS: DataTypes.BOOLEAN,
       IS_OVERDUE_GT_30_DAYS: DataTypes.BOOLEAN,
       IS_OVERDUE_GT_60_DAYS: DataTypes.BOOLEAN,

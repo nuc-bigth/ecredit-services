@@ -301,6 +301,7 @@ function mapRequest(request) {
     SCORING_RATING_ID: request.SCORING_RATING_ID || '',
     IS_PAY_IN_ADVANCE: Boolean(request.IS_PAY_IN_ADVANCE),
     IS_PAY_ON_TIME: Boolean(request.IS_PAY_ON_TIME),
+    IS_OVERDUE_LT_10_DAYS: Boolean(request.IS_OVERDUE_LT_10_DAYS),
     IS_OVERDUE_GT_10_DAYS: Boolean(request.IS_OVERDUE_GT_10_DAYS),
     IS_OVERDUE_GT_30_DAYS: Boolean(request.IS_OVERDUE_GT_30_DAYS),
     IS_OVERDUE_GT_60_DAYS: Boolean(request.IS_OVERDUE_GT_60_DAYS),
@@ -439,8 +440,32 @@ async function getRequestById(id) {
   if (!request) return null;
 
   const response = mapRequest(request);
+  response.PREVIOUS_REF_FINANCIAL_STATEMENT_FY = await findPreviousFinancialStatementYear(models.Request, request);
   response.COMPANY_CODE = await getCompanyCode(response.SOLD_TO);
   return response;
+}
+
+async function findPreviousFinancialStatementYear(Request, currentRequest) {
+  const taxId = typeof currentRequest.CUSTOMER_TAX_NO === 'string'
+    ? currentRequest.CUSTOMER_TAX_NO.trim()
+    : '';
+  if (!/^\d{13}$/.test(taxId)) return null;
+
+  const previousRequest = await Request.findOne({
+    attributes: ['REF_FINANCIAL_STATEMENT_FY'],
+    where: {
+      CUSTOMER_TAX_NO: taxId,
+      ENABLED: true,
+      ID: { [Op.ne]: currentRequest.ID },
+    },
+    order: [['CREATED_DATE', 'DESC']],
+    raw: true,
+  });
+
+  const value = previousRequest?.REF_FINANCIAL_STATEMENT_FY;
+  if (!value) return null;
+  const year = new Date(value).getUTCFullYear();
+  return Number.isInteger(year) && year > 0 ? String(year) : null;
 }
 
 async function listApprovalHistory(requestId) {
@@ -487,7 +512,7 @@ async function listApprovalHistory(requestId) {
         TB1.PROPOSED_LIMIT_AMOUNT AS CREDIT_LIMIT,
         ISNULL(TB4.NAME, '') COLLATE DATABASE_DEFAULT AS CREDIT_TERM,
         ISNULL(TB5.NAME, '') COLLATE DATABASE_DEFAULT AS CREDIT_RATING,
-        'Credit Team' COLLATE DATABASE_DEFAULT AS APPROVER_TYPE_NAME,
+        (SELECT TOP(1) NAME FROM APPROVER_TYPES WHERE ID = 'fca8c4fa-51e8-4c7d-95ac-274d62ba5d7f') COLLATE DATABASE_DEFAULT AS APPROVER_TYPE_NAME,
         'Suggested' COLLATE DATABASE_DEFAULT AS APPROVAL_TYPE_NAME,
         CAST(NULL AS VARCHAR(36)) COLLATE DATABASE_DEFAULT AS APPROVAL_TYPE_ID,
         (CASE WHEN TB1.IS_CLEAR_OUTSTANDING_BALANCE_PROPOSED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS INCLUDED_CLEAR_OUTSTANDING_BALANCE,
@@ -1041,7 +1066,7 @@ function normalizeRequestScoringAndPayment(payload) {
     'SCORING_PROFITABILITY', 'SCORING_GROWTH', 'SCORING_LIQUIDITY', 'SCORING_LEVERAGE',
   ];
   const paymentFields = [
-    'IS_PAY_IN_ADVANCE', 'IS_PAY_ON_TIME', 'IS_OVERDUE_GT_10_DAYS',
+    'IS_PAY_IN_ADVANCE', 'IS_PAY_ON_TIME', 'IS_OVERDUE_LT_10_DAYS', 'IS_OVERDUE_GT_10_DAYS',
     'IS_OVERDUE_GT_30_DAYS', 'IS_OVERDUE_GT_60_DAYS', 'IS_OVERDUE_GT_90_DAYS',
   ];
   const update = {};
@@ -1190,7 +1215,7 @@ const CLONE_FIELDS = [
   'CUSTOMER_BUSINESS_TYPE_INTER', 'CUSTOMER_CUSTOMER_TYPE_INTER', 'CUSTOMER_DIRECTORS', 'CUSTOMER_SHAREHOLDERS',
   'SCORING_PROFITABILITY', 'SCORING_GROWTH', 'SCORING_LIQUIDITY', 'SCORING_LEVERAGE', 'SCORING_RATING_ID',
   'EXISTING_PROFITABILITY', 'EXISTING_GROWTH', 'EXISTING_LIQUIDITY', 'EXISTING_LEVERAGE',
-  'IS_PAY_IN_ADVANCE', 'IS_PAY_ON_TIME', 'IS_OVERDUE_GT_10_DAYS', 'IS_OVERDUE_GT_30_DAYS',
+  'IS_PAY_IN_ADVANCE', 'IS_PAY_ON_TIME', 'IS_OVERDUE_LT_10_DAYS', 'IS_OVERDUE_GT_10_DAYS', 'IS_OVERDUE_GT_30_DAYS',
   'IS_OVERDUE_GT_60_DAYS', 'IS_OVERDUE_GT_90_DAYS', 'PROPOSED_DISPLAYED_NOTES', 'PROPOSED_NOTES',
   'REF_FINANCIAL_STATEMENT_FY',
 ];
