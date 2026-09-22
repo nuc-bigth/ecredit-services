@@ -112,6 +112,59 @@ site/library. New files are stored through Microsoft Graph; the download URL rem
 authenticated eCredit API endpoint. Keep the legacy file-share configuration until existing
 attachments have been migrated.
 
+## Email Service
+
+The reusable email module is available from `services/emailService.js` and renders Handlebars
+templates from `templates/`. The first named email wrapper is
+`emails/requestCompletedEmail.js`. Action endpoints are not wired to email yet.
+
+Email configuration is read from the active `.env.{NODE_ENV}` file:
+
+```text
+EMAIL_SMTP_HOST=smtp.office365.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=<smtp username>
+EMAIL_SMTP_PASSWORD=<smtp password>
+EMAIL_FROM=<sender address>
+EMAIL_BCC=<audit address or comma-separated addresses>
+```
+
+Example:
+
+```javascript
+const { sendRequestCompletedEmail } = require('./emails/requestCompletedEmail');
+
+await sendRequestCompletedEmail({
+  environment: 'dev',
+  subject: 'Request completed',
+  actorEmail: req.user.email,
+  emailModel: {
+    dear: 'Approver',
+    companyName: 'Acme Company',
+    customerType: 'External',
+  },
+});
+```
+
+The template and service fill omitted values with `-`. The supported model keys are
+`dear`, `requestType`, `companyName`, `soldToNo`, `salesGroup`, `businessType`,
+`customerType`, `companyRegisterDate`, `registeredCapital`, `companySize`,
+`creditRatingScore`, `profitability`, `growth`, `liquidity`, `leverage`, `amountBank`,
+`amountDeposit`, `opinion`, `creditTermExisting`, `creditTermRequested`,
+`creditTermProposed`, `creditLimitExisting`, `creditLimitRequested`, and
+`creditLimitProposed`.
+
+Recipient policy:
+
+- DEV/QAS always send `To` to the authenticated actor email (`req.user.email`) and leave `CC` empty.
+- PRD accepts `recipients: { to: string[], cc: string[] }` from the caller.
+- Every environment always adds `EMAIL_BCC`.
+- Subjects are prefixed as `[DEV e-Credit]`, `[QAS e-Credit]`, or `[e-Credit]`.
+
+For request data, `services/requestEmailModelService.js` exposes
+`getRequestEmailModel(requestId, dear)`. It loads the Request with Size, Rating, and Term
+associations and uses `CUSTOMER_CUSTOMER_TYPE_EXTER` for Customer Type.
+
 ## Available Environments
 
 Start the API for a specific environment:

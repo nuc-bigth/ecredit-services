@@ -1,5 +1,7 @@
 const logger = require('../../config/logger');
 const requestService = require('../../services/requestService');
+const { getRequestEmailModel } = require('../../services/requestEmailModelService');
+const { sendRequestCompletedEmail } = require('../../emails/requestCompletedEmail');
 
 async function listRequests(req, res, next) {
   try {
@@ -237,6 +239,32 @@ async function cancelRequest(req, res, next) {
   }
 }
 
+async function sendTestEmail(req, res, next) {
+  try {
+    const correlationId = res.locals.correlationId || 'N/A';
+    const emailModel = await getRequestEmailModel(req.params.id, req.user?.displayName || '-');
+    await sendRequestCompletedEmail({
+      environment: process.env.NODE_ENV,
+      emailModel,
+      subject: 'Test Email',
+      actorEmail: req.user?.email,
+      recipients: {
+        to: req.body?.to,
+        cc: req.body?.cc,
+      },
+    });
+
+    res.status(200).json({ success: true, data: { id: req.params.id }, correlationId });
+  } catch (error) {
+    logger.error(`Error in sendTestEmail: ${error.message}`, {
+      correlationId: res.locals.correlationId,
+      route: { method: req.method, path: req.path },
+      stack: error.stack,
+    });
+    next(error);
+  }
+}
+
 module.exports = {
   listRequests,
   getRequest,
@@ -246,4 +274,5 @@ module.exports = {
   updateRequestRequestedDetails,
   cloneRequestData,
   cancelRequest,
+  sendTestEmail,
 };

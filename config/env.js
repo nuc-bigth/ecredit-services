@@ -47,6 +47,14 @@ const envSchema = Joi.object()
     LOG_LEVEL: Joi.string().valid('debug', 'info', 'warn', 'error').required(),
     LOG_FORMAT: Joi.string().valid('json', 'text').required(),
 
+    // Email Configuration
+    EMAIL_SMTP_HOST: Joi.string().hostname().required(),
+    EMAIL_SMTP_PORT: Joi.number().port().required(),
+    EMAIL_SMTP_USER: Joi.string().email().required(),
+    EMAIL_SMTP_PASSWORD: Joi.string().required(),
+    EMAIL_FROM: Joi.string().email().required(),
+    EMAIL_BCC: Joi.string().required(),
+
     // Attachment Storage Configuration
     ATTACHMENT_STORAGE_DIRECTORY: Joi.string().required(),
     ATTACHMENT_PUBLIC_BASE_URL: Joi.string().uri().required(),
@@ -187,6 +195,19 @@ module.exports = {
   logging: {
     level: config.LOG_LEVEL,
     format: config.LOG_FORMAT,
+  },
+
+  // Email
+  email: {
+    smtp: {
+      host: config.EMAIL_SMTP_HOST,
+      port: parseInt(config.EMAIL_SMTP_PORT, 10),
+      secure: parseInt(config.EMAIL_SMTP_PORT, 10) === 465,
+      user: config.EMAIL_SMTP_USER,
+      password: config.EMAIL_SMTP_PASSWORD,
+    },
+    from: config.EMAIL_FROM,
+    bcc: config.EMAIL_BCC,
   },
 
   // Attachments

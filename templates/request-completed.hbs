@@ -1,0 +1,139 @@
+<style>
+    body { margin: 0; padding: 0; background: #f3f6f8; color: #17212b; font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.45; }
+    table { border-collapse: collapse; }
+    .email-shell { width: 100%; background: #f2f7f4; }
+    .email-container { width: 80%; margin: 0 auto; background: #ffffff; }
+    .brand-header { background: #007a3d; color: #ffffff; }
+    .brand-header td { padding: 28px 36px; }
+    .brand-name { margin: 0; color: #ffffff; font-size: 24px; font-weight: bold; line-height: 1.2; }
+    .brand-subtitle { margin: 6px 0 0; color: #d9f2e4; font-size: 14px; }
+    .email-content { padding: 32px 36px 24px; }
+    .greeting { margin: 0 0 10px; font-size: 16px; font-weight: bold; }
+    .intro { margin: 0 0 26px; color: #4b5b67; }
+    .section-title { margin: 26px 0 10px; color: #007a3d; font-size: 16px; font-weight: bold; }
+    .info-table { width: 100%; border: 1px solid #d6e6da; }
+    .info-table td { padding: 10px 12px; border-bottom: 1px solid #d6e6da; vertical-align: top; }
+    .info-table tr:last-child td { border-bottom: 0; }
+    .info-table .label { width: 260px; background: #edf7f1; color: #284534; font-weight: bold; }
+    .info-table .value { color: #17212b; word-break: break-word; }
+    .rating-score { color: #007a3d; font-size: 18px; font-weight: bold; }
+    .credit-detail-table { width: 100%; border: 1px solid #d6e6da; }
+    .credit-detail-table th { padding: 10px 8px; background: #007a3d; border: 1px solid #d6e6da; color: #ffffff; font-size: 12px; font-weight: bold; text-align: center; vertical-align: middle; }
+    .credit-detail-table td { padding: 10px 8px; border: 1px solid #d6e6da; text-align: center; vertical-align: top; }
+    .credit-detail-table td:first-child { background: #edf7f1; color: #284534; font-weight: bold; text-align: left; }
+    .conditions-table td { border: 0 !important; }
+    .button-note { margin: 8px 0 0; color: #667784; font-size: 12px; }
+    .email-footer td { padding: 18px 36px; background: #eaf4ed; color: #557061; font-size: 12px; }
+</style>
+
+<table class="email-shell" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+    <tr><td align="center">
+        <table class="email-container" role="presentation" width="80%" cellspacing="0" cellpadding="0" border="0">
+            <tr class="brand-header"><td>
+                <p class="brand-name">e-Credit System</p>
+                <p class="brand-subtitle">Credit request summary and approval details</p>
+            </td></tr>
+            <tr><td class="email-content">
+                <p class="greeting">Dear {{dear}},</p>
+                <p class="intro">e-Credit has completed your request. The submitted and recommended credit details are provided below.</p>
+
+                <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td class="label">Request Type</td><td class="value">{{requestType}}</td></tr></table>
+
+                <p class="section-title">Customer Information</p>
+                <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                    <tr><td class="label">Company Name</td><td class="value">{{companyName}}</td></tr>
+                    <tr><td class="label">Sold To No.</td><td class="value">{{soldToNo}}</td></tr>
+                    <tr><td class="label">Sales Group</td><td class="value">{{salesGroup}}</td></tr>
+                    <tr><td class="label">Business Type (Sold-To Industry)</td><td class="value">{{businessType}}</td></tr>
+                    <tr><td class="label">Customer Type (External)</td><td class="value">{{customerType}}</td></tr>
+                    <tr><td class="label">Company Register Date</td><td class="value">{{companyRegisterDate}}</td></tr>
+                    <tr><td class="label">Registered Capital (THB)</td><td class="value">{{registeredCapital}}</td></tr>
+                    <tr><td class="label">Company Size</td><td class="value">{{companySize}}</td></tr>
+                </table>
+
+                <p class="section-title">Credit Rating Scoring</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border: 1px solid #d6e6da;">
+                    <tr>
+                        <td width="25%" align="center" valign="top" style="padding: 12px 8px; border-right: 1px solid #d6e6da; background-color: #fafdfb; color: #284534;">
+                            <span style="font-size: 12px; font-weight: bold;">Profitability</span><br>
+                            <span style="color: #007a3d; font-size: 22px; font-weight: bold; line-height: 1.6;">{{profitability}}</span>
+                        </td>
+                        <td width="25%" align="center" valign="top" style="padding: 12px 8px; border-right: 1px solid #d6e6da; background-color: #fafdfb; color: #284534;">
+                            <span style="font-size: 12px; font-weight: bold;">Growth</span><br>
+                            <span style="color: #007a3d; font-size: 22px; font-weight: bold; line-height: 1.6;">{{growth}}</span>
+                        </td>
+                        <td width="25%" align="center" valign="top" style="padding: 12px 8px; border-right: 1px solid #d6e6da; background-color: #fafdfb; color: #284534;">
+                            <span style="font-size: 12px; font-weight: bold;">Liquidity</span><br>
+                            <span style="color: #007a3d; font-size: 22px; font-weight: bold; line-height: 1.6;">{{liquidity}}</span>
+                        </td>
+                        <td width="25%" align="center" valign="top" style="padding: 12px 8px; background-color: #fafdfb; color: #284534;">
+                            <span style="font-size: 12px; font-weight: bold;">Leverage</span><br>
+                            <span style="color: #007a3d; font-size: 22px; font-weight: bold; line-height: 1.6;">{{leverage}}</span>
+                        </td>
+                    </tr>
+                </table>
+
+                {{#if showScoringClassification}}
+                <p class="section-title">Scoring Classification</p>
+                <table class="conditions-table" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#fafdfb" style="background-color: #fafdfb; border-top: 1px solid #d6e6da; border-bottom: 1px solid #d6e6da; border-left: 1px solid #d6e6da; border-right: 1px solid #d6e6da;">
+                    <tr>
+                        <td style="padding: 12px 12px 0px 12px; color: #334f3d;"><ul style="margin: 0; padding-left: 20px;"><li>N/A</li></ul></td>
+                        <td width="28" align="center" style="padding: 2px 12px 7px; font-weight: bold; color: {{#if scoringClassificationNa}}#007a3d{{else}}#c0392b{{/if}};">{{#if scoringClassificationNa}}&#10003;{{else}}&#10007;{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0px 12px 0px 12px; color: #334f3d;"><ul style="margin: 0; padding-left: 20px;"><li>Government Hospital &amp; Institution &amp; Education</li></ul></td>
+                        <td width="28" align="center" style="padding: 2px 12px 7px; font-weight: bold; color: {{#if scoringClassificationGovernment}}#007a3d{{else}}#c0392b{{/if}};">{{#if scoringClassificationGovernment}}&#10003;{{else}}&#10007;{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0px 12px 12px 12px; color: #334f3d;"><ul style="margin: 0; padding-left: 20px;"><li>Others</li></ul></td>
+                        <td width="28" align="center" style="padding: 2px 12px 7px; font-weight: bold; color: {{#if scoringClassificationOthers}}#007a3d{{else}}#c0392b{{/if}};">{{#if scoringClassificationOthers}}&#10003;{{else}}&#10007;{{/if}}</td>
+                    </tr>
+                </table>
+                {{/if}}
+
+                <p style="margin: 18px 0 8px; color: #007a3d; font-size: 14px; font-weight: bold;">Scoring Notes</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border: 1px solid #d6e6da;">
+                    <tr><td bgcolor="#fafdfb" style="height: 58px; padding: 12px 16px; background-color: #fafdfb; color: #667784; font-size: 12px;">{{{scoringNotes}}}</td></tr>
+                </table>
+
+                <p class="section-title">Credit Details</p>
+                <table class="credit-detail-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                    <tr><th>Credit Type</th><th>Existing</th><th>New Proposed by BAE</th><th>Suggested by Credit Team</th></tr>
+                    <tr><td>Credit Term</td><td>{{creditTermExisting}}</td><td>{{creditTermRequested}}</td><td>{{creditTermProposed}}</td></tr>
+                    <tr><td>Credit Limit (THB)</td><td>{{creditLimitExisting}}</td><td>{{creditLimitRequested}}</td><td>{{creditLimitProposed}}</td></tr>
+                    <tr><td>Credit Rating</td><td>{{creditRatingExisting}}</td><td>-</td><td>{{creditRatingProposed}}</td></tr>
+                </table>
+
+                {{#if showAdditionalConditions}}
+                <p class="section-title">Additional Conditions</p>
+                <table class="conditions-table" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#fafdfb" style="background-color: #fafdfb; border-top: 1px solid #d6e6da; border-bottom: 1px solid #d6e6da; border-left: 1px solid #d6e6da; border-right: 1px solid #d6e6da;">
+                    <tr>
+                        <td style="padding: 12px 12px 0px 12px; color: #334f3d;"><ul style="margin: 0; padding-left: 20px;"><li>Clear Outstanding Balance</li></ul></td>
+                        <td width="28" align="center" style="padding: 2px 12px; font-weight: bold; color: {{#if clearOutstandingBalance}}#007a3d{{else}}#c0392b{{/if}};">{{#if clearOutstandingBalance}}&#10003;{{else}}&#10007;{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0px 12px 0px 12px; color: #334f3d;"><ul style="margin: 0; padding-left: 20px;"><li>Limit Credit Used To Not Exceed Approved</li></ul></td>
+                        <td width="28" align="center" style="padding: 2px 12px; font-weight: bold; color: {{#if withinApprovedLimit}}#007a3d{{else}}#c0392b{{/if}};">{{#if withinApprovedLimit}}&#10003;{{else}}&#10007;{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0px 12px 0px 12px; color: #334f3d;"><ul style="margin: 0; padding-left: 20px;"><li>Bank Guarantee &nbsp;&nbsp;<strong>Amount: {{amountBank}}</strong></li></ul></td>
+                        <td width="28" align="center" style="padding: 2px 12px 7px; font-weight: bold; color: {{#if bankGuarantee}}#007a3d{{else}}#c0392b{{/if}};">{{#if bankGuarantee}}&#10003;{{else}}&#10007;{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0px 12px 12px 12px; color: #334f3d;"><ul style="margin: 0; padding-left: 20px;"><li>Cash Deposit &nbsp;&nbsp;<strong>Amount: {{amountDeposit}}</strong></li></ul></td>
+                        <td width="28" align="center" style="padding: 2px 12px 7px; font-weight: bold; color: {{#if cashDeposit}}#007a3d{{else}}#c0392b{{/if}};">{{#if cashDeposit}}&#10003;{{else}}&#10007;{{/if}}</td>
+                    </tr>
+                </table>
+                {{/if}}
+
+                <p class="section-title">Credit Team Opinion</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border: 1px solid #d6e6da;">
+                    <tr><td bgcolor="#fafdfb" style="padding: 14px 16px; background-color: #fafdfb; color: #334f3d;">{{{opinion}}}</td></tr>
+                </table>
+                <p style="margin: 26px 0 4px;"><a href="{{link}}" target="_blank" style="color: #007a3d; font-weight: bold;">Open e-Credit System</a></p>
+                <p class="button-note">Use the button above to access this request for approval.</p>
+            </td></tr>
+            <tr class="email-footer"><td>This is an automated notification from e-Credit System.</td></tr>
+        </table>
+    </td></tr>
+</table>

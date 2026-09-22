@@ -22,6 +22,7 @@ router.post('/:requestId/attachments', authenticationMiddleware, attachmentContr
 router.get('/:requestId/attachments/:attachmentId/download', authenticationMiddleware, attachmentController.downloadAttachment);
 router.delete('/:requestId/attachments/:attachmentId', authenticationMiddleware, attachmentController.deleteAttachment);
 router.get('/:id', authenticationMiddleware, requestController.getRequest);
+router.post('/:id/test-email', authenticationMiddleware, requestController.sendTestEmail);
 router.patch('/:id/customer-info', authenticationMiddleware, requestController.updateRequestCustomerInfo);
 router.patch('/:id/credit-suggestion', authenticationMiddleware, requestController.updateRequestCreditSuggestion);
 router.patch('/:id/scoring-payment', authenticationMiddleware, requestController.updateRequestScoringAndPayment);
