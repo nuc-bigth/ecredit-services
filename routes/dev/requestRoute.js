@@ -5,6 +5,7 @@ const attachmentController = require('../../controllers/dev/attachmentController
 const eventLogController = require('../../controllers/eventLogController');
 const approvalHistoryController = require('../../controllers/approvalHistoryController');
 const requestMetadataController = require('../../controllers/requestMetadataController');
+const emailController = require('../../controllers/emailController');
 
 const router = express.Router();
 
@@ -15,6 +16,9 @@ router.get('/ratings', authenticationMiddleware, requestMetadataController.listE
 router.get('/terms', authenticationMiddleware, requestMetadataController.listTerms);
 router.get('/:requestId/event-logs', authenticationMiddleware, eventLogController.listRequestEvents);
 router.get('/:requestId/event-logs/:logId', authenticationMiddleware, eventLogController.getRequestEvent);
+router.get('/:requestId/emails', authenticationMiddleware, emailController.listRequestEmails);
+router.get('/:requestId/emails/:emailId', authenticationMiddleware, emailController.getRequestEmail);
+router.post('/:requestId/emails/resend', authenticationMiddleware, emailController.resendRequestEmails);
 router.get('/:requestId/approval-history', authenticationMiddleware, approvalHistoryController.listApprovalHistory);
 router.get('/:requestId/approval-submit-options', authenticationMiddleware, approvalHistoryController.getApprovalSubmitOptions);
 router.get('/:requestId/attachments', authenticationMiddleware, attachmentController.listAttachments);

@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const { Op, fn, col, where: sequelizeWhere } = require('sequelize');
 const logger = require('../config/logger');
 const { getModels } = require('../models');
+const { formatThaiDateTime } = require('../helpers/thaiDateTime');
 
 const LOG_TYPE_IDS = {
   success: '23556cea-337f-475c-9b6a-830bfa08ab93',
@@ -121,7 +122,7 @@ function mapEventLog(log, includeDescription = false) {
     name: record.NAME,
     category: record.CATEGORY,
     logTypeId: record.LOG_TYPE_ID,
-    createdDate: record.CREATED_DATE,
+    createdDate: formatThaiDateTime(record.CREATED_DATE),
     createdBy: record.CREATED_BY,
     actor,
     ...(includeDescription ? { payload } : {}),

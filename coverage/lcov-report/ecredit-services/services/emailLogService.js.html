@@ -1,0 +1,544 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for ecredit-services/services/emailLogService.js</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">ecredit-services/services</a> emailLogService.js</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">42.64% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>29/68</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">37.89% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>36/95</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">41.66% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>5/12</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">39.34% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>24/61</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">40x</span>
+<span class="cline-any cline-yes">39x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">37x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">33x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const { v4: uuidv4 } = require('uuid');
+const { Op, literal } = require('sequelize');
+const { getModels } = require('../models');
+const { formatThaiDateTime } = require('../helpers/thaiDateTime');
+&nbsp;
+const EMAIL_LOG_TYPE_ID = 'email';
+const MAX_DESCRIPTION_BYTES = 1024 * 1024;
+const SENSITIVE_KEY = /(password|token|secret|authorization|cookie|api[-_]?key)/i;
+&nbsp;
+function sanitizeValue(value, key = '') {
+  if (SENSITIVE_KEY.test(key)) return '[omitted]';
+  if (typeof value === 'string' &amp;&amp; value.length &gt; 512) {
+    <span class="missing-if-branch" title="else path not taken" >E</span>if (/^[a-z0-9+/=\r\n]+$/i.test(value) &amp;&amp; value.length &gt; 256) return `[base64 omitted: ${value.length} chars]`;
+<span class="cstat-no" title="statement not covered" >    return `${value.slice(0, 512)}... [truncated]`;</span>
+  }
+  if (Array.isArray(value)) return value.map((item) =&gt; sanitizeValue(item));
+  if (value &amp;&amp; typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([childKey, child]) =&gt; [childKey, sanitizeValue(child, childKey)]));
+  }
+  return value;
+}
+&nbsp;
+function parseDescription(description) {
+  try {
+    return JSON.parse(description || <span class="branch-1 cbranch-no" title="branch not covered" >'{}')</span>;
+  } catch {
+<span class="cstat-no" title="statement not covered" >    return { raw: description || '' };</span>
+  }
+}
+&nbsp;
+function <span class="fstat-no" title="function not covered" >employeeCode(</span>user) {
+  const value = <span class="cstat-no" title="statement not covered" >Number(user?.profile?.LOGGED_IN_CODE ?? user?.profile?.CODE);</span>
+<span class="cstat-no" title="statement not covered" >  return Number.isSafeInteger(value) ? value : null;</span>
+}
+&nbsp;
+function buildDescription({ status, environment, template, subject, baseSubject, recipients, bcc, model, providerResult, error, resendOf }) {
+  const displayPayload = sanitizeValue({
+    status,
+    environment,
+    template,
+    subject,
+    baseSubject: baseSubject || subject,
+    recipients,
+    bccCount: Array.isArray(bcc) ? bcc.length : <span class="branch-1 cbranch-no" title="branch not covered" >0,</span>
+    providerMessageId: providerResult?.messageId || null,
+    providerAccepted: providerResult?.accepted || [],
+    providerRejected: providerResult?.rejected || [],
+    error: error ? <span class="branch-0 cbranch-no" title="branch not covered" >{ message: error.message, code: error.code || null } </span>: null,
+    resendOf: resendOf || null,
+  });
+  const displayModel = sanitizeValue(model);
+  displayPayload.model = displayModel;
+  const rawSendParameters = {
+    environment,
+    template,
+    baseSubject: baseSubject || subject,
+    subject,
+    recipients,
+    bcc,
+    model,
+  };
+  let serializedDisplay = JSON.stringify(displayPayload);
+  <span class="missing-if-branch" title="if path not taken" >I</span>if (Buffer.byteLength(serializedDisplay, 'utf8') &gt; MAX_DESCRIPTION_BYTES) {
+<span class="cstat-no" title="statement not covered" >    serializedDisplay = JSON.stringify({ ...displayPayload, model: '[omitted: display payload exceeded storage limit]', payloadTruncated: true });</span>
+  }
+  return JSON.stringify({ status, resendOf: resendOf || null, sendParameters: rawSendParameters, displayPayload: JSON.parse(serializedDisplay), providerResult: providerResult ? <span class="branch-0 cbranch-no" title="branch not covered" >{ messageId: providerResult.messageId || null } </span>: null, error: error ? <span class="branch-0 cbranch-no" title="branch not covered" >{ message: error.message, code: error.code || null } </span>: null });
+}
+&nbsp;
+async function <span class="fstat-no" title="function not covered" >createEmailLog(</span>payload) {
+  const { Email } = <span class="cstat-no" title="statement not covered" >getModels();</span>
+  const databaseNow = <span class="cstat-no" title="statement not covered" >Email.sequelize.literal('GETDATE()');</span>
+<span class="cstat-no" title="statement not covered" >  return Email.create({</span>
+    ID: uuidv4(),
+    NAME: payload.subject,
+    DESCRIPTION: buildDescription(payload),
+    LOG_TYPE_ID: EMAIL_LOG_TYPE_ID,
+    REQUEST_ID: payload.requestId || null,
+    CATEGORY: payload.template,
+    CREATED_DATE: databaseNow,
+    UPDATED_DATE: databaseNow,
+    CREATED_BY: employeeCode(payload.user),
+    UPDATED_BY: employeeCode(payload.user),
+    ENABLED: true,
+    SORTING: 0,
+  });
+}
+&nbsp;
+async function <span class="fstat-no" title="function not covered" >updateEmailLog(</span>emailLog, payload) {
+  const { Email } = <span class="cstat-no" title="statement not covered" >getModels();</span>
+<span class="cstat-no" title="statement not covered" >  await emailLog.update({</span>
+    DESCRIPTION: buildDescription(payload),
+    UPDATED_DATE: Email.sequelize.literal('GETDATE()'),
+    UPDATED_BY: employeeCode(payload.user),
+  });
+<span class="cstat-no" title="statement not covered" >  return emailLog;</span>
+}
+&nbsp;
+function <span class="fstat-no" title="function not covered" >toEmailSummary(</span>emailLog) {
+  const payload = <span class="cstat-no" title="statement not covered" >parseDescription(emailLog.DESCRIPTION);</span>
+  const displayPayload = <span class="cstat-no" title="statement not covered" >payload.displayPayload || payload;</span>
+  const employee = <span class="cstat-no" title="statement not covered" >emailLog.updatedByEmployee;</span>
+<span class="cstat-no" title="statement not covered" >  return {</span>
+    id: emailLog.ID,
+    name: emailLog.NAME,
+    category: emailLog.CATEGORY,
+    requestId: emailLog.REQUEST_ID,
+    actor: employee ? `${employee.INITIALS ?? ''}-${employee.USERNAME ?? ''}` : null,
+    status: payload.status || displayPayload.status || 'UNKNOWN',
+    template: displayPayload.template || payload.template || emailLog.CATEGORY,
+    recipients: displayPayload.recipients || payload.recipients || { to: [], cc: [] },
+    providerMessageId: payload.providerResult?.messageId || displayPayload.providerMessageId || payload.providerMessageId || null,
+    error: payload.error || null,
+    createdDate: formatThaiDateTime(emailLog.CREATED_DATE),
+    updatedDate: formatThaiDateTime(emailLog.UPDATED_DATE),
+  };
+}
+&nbsp;
+async function <span class="fstat-no" title="function not covered" >listEmailLogs(</span>requestId, query = <span class="branch-0 cbranch-no" title="branch not covered" >{})</span> {
+  const { Email } = <span class="cstat-no" title="statement not covered" >getModels();</span>
+  const page = <span class="cstat-no" title="statement not covered" >Math.max(Number.parseInt(query.page, 10) || 1, 1);</span>
+  const pageSize = <span class="cstat-no" title="statement not covered" >Math.min(Math.max(Number.parseInt(query.pageSize, 10) || 20, 1), 100);</span>
+  const where = <span class="cstat-no" title="statement not covered" >{ REQUEST_ID: requestId, ENABLED: true };</span>
+  const requestedStatus = <span class="cstat-no" title="statement not covered" >String(query.status || '').toUpperCase();</span>
+  const statusMap = <span class="cstat-no" title="statement not covered" >{ SUCCESS: 'SENT', SENT: 'SENT', ERROR: 'FAILED', FAILED: 'FAILED', PENDING: 'PENDING' };</span>
+<span class="cstat-no" title="statement not covered" >  if (statusMap[requestedStatus]) <span class="cstat-no" title="statement not covered" >where[Op.and] = [literal(`JSON_VALUE([DESCRIPTION], '$.status') = '${statusMap[requestedStatus]}'`)];</span></span>
+<span class="cstat-no" title="statement not covered" >  if (query.search) <span class="cstat-no" title="statement not covered" >where[Op.or] = [</span></span>
+    { NAME: { [Op.like]: `%${String(query.search).slice(0, 100)}%` } },
+    { CATEGORY: { [Op.like]: `%${String(query.search).slice(0, 100)}%` } },
+  ];
+  const { Employee } = <span class="cstat-no" title="statement not covered" >getModels();</span>
+  const result = <span class="cstat-no" title="statement not covered" >await Email.findAndCountAll({ where, include: [{ model: Employee, as: 'updatedByEmployee', attributes: ['INITIALS', 'USERNAME'], required: false }], order: [['CREATED_DATE', 'DESC']], limit: pageSize, offset: (page - 1) * pageSize });</span>
+<span class="cstat-no" title="statement not covered" >  return { items: result.rows.map(toEmailSummary), pagination: { page, pageSize, totalItems: result.count, totalPages: Math.ceil(result.count / pageSize) } };</span>
+}
+&nbsp;
+async function <span class="fstat-no" title="function not covered" >getEmailLog(</span>requestId, emailId) {
+  const { Email, Employee } = <span class="cstat-no" title="statement not covered" >getModels();</span>
+  const emailLog = <span class="cstat-no" title="statement not covered" >await Email.findOne({ where: { ID: emailId, REQUEST_ID: requestId, ENABLED: true }, include: [{ model: Employee, as: 'updatedByEmployee', attributes: ['INITIALS', 'USERNAME'], required: false }] });</span>
+<span class="cstat-no" title="statement not covered" >  if (!emailLog) {</span>
+    const error = <span class="cstat-no" title="statement not covered" >new Error('Email log was not found.');</span>
+<span class="cstat-no" title="statement not covered" >    error.statusCode = 404;</span>
+<span class="cstat-no" title="statement not covered" >    throw error;</span>
+  }
+  const summary = <span class="cstat-no" title="statement not covered" >toEmailSummary(emailLog);</span>
+  const storedPayload = <span class="cstat-no" title="statement not covered" >parseDescription(emailLog.DESCRIPTION);</span>
+<span class="cstat-no" title="statement not covered" >  return { ...summary, payload: storedPayload.displayPayload || storedPayload };</span>
+}
+&nbsp;
+async function <span class="fstat-no" title="function not covered" >findEmailLogs(</span>requestId, emailIds) {
+  const { Email } = <span class="cstat-no" title="statement not covered" >getModels();</span>
+<span class="cstat-no" title="statement not covered" >  return Email.findAll({ where: { ID: emailIds, REQUEST_ID: requestId, ENABLED: true } });</span>
+}
+&nbsp;
+module.exports = { EMAIL_LOG_TYPE_ID, sanitizeValue, buildDescription, createEmailLog, updateEmailLog, listEmailLogs, getEmailLog, findEmailLogs, toEmailSummary, parseDescription };
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-09-23T04:13:33.005Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

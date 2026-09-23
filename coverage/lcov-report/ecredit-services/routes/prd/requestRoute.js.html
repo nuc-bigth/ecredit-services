@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/30</span>
+                <span class='fraction'>0/36</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/30</span>
+                <span class='fraction'>0/36</span>
             </div>
         
             
@@ -96,7 +96,15 @@
 <a name='L31'></a><a href='#L31'>31</a>
 <a name='L32'></a><a href='#L32'>32</a>
 <a name='L33'></a><a href='#L33'>33</a>
-<a name='L34'></a><a href='#L34'>34</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -108,6 +116,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -132,10 +144,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const express = <span class="cstat-no" title="statement not covered" >require('express');</span>
 const authenticationMiddleware = <span class="cstat-no" title="statement not covered" >require('../../middlewares/authentication');</span>
 const requestController = <span class="cstat-no" title="statement not covered" >require('../../controllers/prd/requestController');</span>
+const sendTestEmail = <span class="cstat-no" title="statement not covered" >require('../../controllers/dev/requestController').sendTestEmail;</span>
 const cloneRequestData = <span class="cstat-no" title="statement not covered" >require('../../controllers/dev/requestController').cloneRequestData;</span>
 const updateRequestScoringAndPayment = <span class="cstat-no" title="statement not covered" >require('../../controllers/dev/requestController').updateRequestScoringAndPayment;</span>
 const attachmentController = <span class="cstat-no" title="statement not covered" >require('../../controllers/prd/attachmentController');</span>
 const eventLogController = <span class="cstat-no" title="statement not covered" >require('../../controllers/eventLogController');</span>
+const emailController = <span class="cstat-no" title="statement not covered" >require('../../controllers/emailController');</span>
 const approvalHistoryController = <span class="cstat-no" title="statement not covered" >require('../../controllers/approvalHistoryController');</span>
 const requestMetadataController = <span class="cstat-no" title="statement not covered" >require('../../controllers/requestMetadataController');</span>
 &nbsp;
@@ -147,6 +161,9 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >router.get('/ratings', authenticationMiddleware, requestMetadataController.listEnabledRatings);</span>
 <span class="cstat-no" title="statement not covered" >router.get('/:requestId/event-logs', authenticationMiddleware, eventLogController.listRequestEvents);</span>
 <span class="cstat-no" title="statement not covered" >router.get('/:requestId/event-logs/:logId', authenticationMiddleware, eventLogController.getRequestEvent);</span>
+<span class="cstat-no" title="statement not covered" >router.get('/:requestId/emails', authenticationMiddleware, emailController.listRequestEmails);</span>
+<span class="cstat-no" title="statement not covered" >router.get('/:requestId/emails/:emailId', authenticationMiddleware, emailController.getRequestEmail);</span>
+<span class="cstat-no" title="statement not covered" >router.post('/:requestId/emails/resend', authenticationMiddleware, emailController.resendRequestEmails);</span>
 <span class="cstat-no" title="statement not covered" >router.get('/:requestId/approval-history', authenticationMiddleware, approvalHistoryController.listApprovalHistory);</span>
 <span class="cstat-no" title="statement not covered" >router.get('/:requestId/approval-submit-options', authenticationMiddleware, approvalHistoryController.getApprovalSubmitOptions);</span>
 <span class="cstat-no" title="statement not covered" >router.get('/:requestId/attachments', authenticationMiddleware, attachmentController.listAttachments);</span>
@@ -154,6 +171,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >router.get('/:requestId/attachments/:attachmentId/download', authenticationMiddleware, attachmentController.downloadAttachment);</span>
 <span class="cstat-no" title="statement not covered" >router.delete('/:requestId/attachments/:attachmentId', authenticationMiddleware, attachmentController.deleteAttachment);</span>
 <span class="cstat-no" title="statement not covered" >router.get('/:id', authenticationMiddleware, requestController.getRequest);</span>
+<span class="cstat-no" title="statement not covered" >router.post('/:id/test-email', authenticationMiddleware, sendTestEmail);</span>
 <span class="cstat-no" title="statement not covered" >router.patch('/:id/customer-info', authenticationMiddleware, requestController.updateRequestCustomerInfo);</span>
 <span class="cstat-no" title="statement not covered" >router.patch('/:id/scoring-payment', authenticationMiddleware, updateRequestScoringAndPayment);</span>
 <span class="cstat-no" title="statement not covered" >router.post('/:id/clone-data', authenticationMiddleware, cloneRequestData);</span>
@@ -169,7 +187,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-22T05:15:00.930Z
+                at 2026-09-23T04:13:33.005Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

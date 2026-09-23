@@ -252,6 +252,8 @@ async function sendTestEmail(req, res, next) {
         to: req.body?.to,
         cc: req.body?.cc,
       },
+      requestId: req.params.id,
+      user: req.user,
     });
 
     res.status(200).json({ success: true, data: { id: req.params.id }, correlationId });

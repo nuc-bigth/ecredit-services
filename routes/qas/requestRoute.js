@@ -6,6 +6,7 @@ const cloneRequestData = require('../../controllers/dev/requestController').clon
 const updateRequestScoringAndPayment = require('../../controllers/dev/requestController').updateRequestScoringAndPayment;
 const attachmentController = require('../../controllers/qas/attachmentController');
 const eventLogController = require('../../controllers/eventLogController');
+const emailController = require('../../controllers/emailController');
 const approvalHistoryController = require('../../controllers/approvalHistoryController');
 const requestMetadataController = require('../../controllers/requestMetadataController');
 
@@ -17,6 +18,9 @@ router.get('/log-types', authenticationMiddleware, requestMetadataController.lis
 router.get('/ratings', authenticationMiddleware, requestMetadataController.listEnabledRatings);
 router.get('/:requestId/event-logs', authenticationMiddleware, eventLogController.listRequestEvents);
 router.get('/:requestId/event-logs/:logId', authenticationMiddleware, eventLogController.getRequestEvent);
+router.get('/:requestId/emails', authenticationMiddleware, emailController.listRequestEmails);
+router.get('/:requestId/emails/:emailId', authenticationMiddleware, emailController.getRequestEmail);
+router.post('/:requestId/emails/resend', authenticationMiddleware, emailController.resendRequestEmails);
 router.get('/:requestId/approval-history', authenticationMiddleware, approvalHistoryController.listApprovalHistory);
 router.get('/:requestId/approval-submit-options', authenticationMiddleware, approvalHistoryController.getApprovalSubmitOptions);
 router.get('/:requestId/attachments', authenticationMiddleware, attachmentController.listAttachments);

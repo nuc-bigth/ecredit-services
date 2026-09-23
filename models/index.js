@@ -16,6 +16,7 @@ const defineAttachment = require('./attachment');
 const defineLog = require('./log');
 const defineLogType = require('./logType');
 const defineApproval = require('./approval');
+const defineEmail = require('./email');
 
 /**
  * Sequelize model registry
@@ -43,6 +44,7 @@ function initModels(sequelize) {
   const Log = defineLog(sequelize);
   const LogType = defineLogType(sequelize);
   const Approval = defineApproval(sequelize);
+  const Email = defineEmail(sequelize);
 
   // TB1 -> TB2 (USERS.ID = S_EMPLOYEE1.EMP_CODE)
   User.hasOne(Employee, { as: 'employee', foreignKey: 'EMP_CODE', sourceKey: 'ID' });
@@ -82,6 +84,7 @@ function initModels(sequelize) {
   Customer.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
 
   Log.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
+  Email.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
 
   // ROLE_PERMISSIONS: Role <-> Permission grants
   RolePermission.belongsTo(Role, { as: 'role', foreignKey: 'ROLE_ID' });
@@ -110,6 +113,7 @@ function initModels(sequelize) {
     Log,
     LogType,
     Approval,
+    Email,
   };
   return models;
 }
