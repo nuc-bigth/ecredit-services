@@ -1,12 +1,17 @@
 /* eslint-env jest */
 
 jest.mock('../models', () => ({ getModels: jest.fn() }));
+jest.mock('../services/requestService', () => ({
+  listApprovalHistory: jest.fn().mockResolvedValue([]),
+}));
 
 const { getModels } = require('../models');
+const { listApprovalHistory } = require('../services/requestService');
 const {
   formatDate,
   formatMoney,
   mapRequestToEmailModel,
+  mapCreditDetailsMovements,
   getRequestEmailModel,
 } = require('../services/requestEmailModelService');
 
@@ -22,7 +27,7 @@ describe('requestEmailModelService', () => {
       REQUESTED_CUSTOMER_TYPE: 'New',
       CUSTOMER_NAME_ENG: 'Acme',
       SOLD_TO: '100001',
-      REQUESTED_SALES_GROUP: '100',
+      REQUESTED_SALES_GROUP: '200',
       CUSTOMER_BUSINESS_TYPE_INTER: 'Industry',
       CUSTOMER_CUSTOMER_TYPE_EXTER: 'External',
       CUSTOMER_REGISTERED_DATE: '2026-09-22',
@@ -56,6 +61,9 @@ describe('requestEmailModelService', () => {
 
     expect(model).toEqual(expect.objectContaining({
       dear: 'Approver',
+      salesGroup: '200 - MG',
+      requestNo: '-',
+      crmNo: '-',
       customerType: 'External',
       registeredCapital: '20,000.00',
       creditRatingScore: 'A',
@@ -67,6 +75,10 @@ describe('requestEmailModelService', () => {
       scoringClassificationGovernment: true,
       scoringClassificationOthers: false,
       showScoringClassification: true,
+      existingProfitability: '-',
+      existingGrowth: '-',
+      existingLiquidity: '-',
+      existingLeverage: '-',
       clearOutstandingBalance: true,
       withinApprovedLimit: false,
       bankGuarantee: true,
@@ -93,6 +105,85 @@ describe('requestEmailModelService', () => {
     expect(model.showAdditionalConditions).toBe(false);
   });
 
+  test('maps movement history in order and shares display steps for parallel approvals', () => {
+    const movements = mapCreditDetailsMovements([
+      { APPROVER_TYPE_NAME: 'Requester', APPROVAL_TYPE_NAME: 'Requested', APPROVER_NAME: 'BAE', LAST_UPDATE_BY: 'BAE', LAST_UPDATE_DATE: '1', CREDIT_TERM: '30 days', CREDIT_LIMIT: 250000, CREDIT_RATING: 'A', PARALLEL_KEYS: null },
+      { APPROVER_TYPE_NAME: 'Manager Approve (BDS)', APPROVAL_TYPE_NAME: 'Approved', APPROVER_NAME: 'BDS', LAST_UPDATE_BY: 'BDS', LAST_UPDATE_DATE: '2', CREDIT_TERM: '30 days', CREDIT_LIMIT: 250000, CREDIT_RATING: 'A', PARALLEL_KEYS: 'manager' },
+      { APPROVER_TYPE_NAME: 'Manager Approve (Finance)', APPROVAL_TYPE_NAME: 'Pending', APPROVER_NAME: 'Finance', LAST_UPDATE_BY: 'Finance', LAST_UPDATE_DATE: '3', CREDIT_TERM: '', CREDIT_LIMIT: null, CREDIT_RATING: '', PARALLEL_KEYS: 'manager' },
+    ]);
+
+    expect(movements).toEqual([
+      expect.objectContaining({ displayStep: 1, approverType: 'Requester' }),
+      expect.objectContaining({ displayStep: 2, approverType: 'Manager Approve (BDS)', creditLimit: '250,000.00' }),
+      expect.objectContaining({ displayStep: 2, approverType: 'Manager Approve (Finance)', creditTerm: '-', creditLimit: '-', creditRating: '-' }),
+    ]);
+  });
+
+  test('maps credit details, approval summary, and the pending current step', () => {
+    const model = mapRequestToEmailModel({
+      EXISTING_LIMIT_AMOUNT: 200000,
+      PROPOSED_LIMIT_AMOUNT: 250000,
+      existingTerm: { NAME: 'C030 - 30 days from invoice date' },
+      proposedTerm: { NAME: 'S045 - 45 days from month of supply' },
+      existingRating: { NAME: 'B (High)' },
+      proposedRating: { NAME: 'B (Medium)' },
+    }, '-', [
+      { APPROVER_TYPE_NAME: 'Requester', APPROVAL_TYPE_NAME: 'Requested', APPROVER_NAME: 'BAE', SORTING: 1, CURRENT_CYCLE: true },
+      { APPROVER_TYPE_NAME: 'Credit Team', APPROVAL_TYPE_NAME: 'Suggested', APPROVER_NAME: 'NUT', SORTING: 2, CURRENT_CYCLE: true, CREDIT_LIMIT: 250000, CREDIT_TERM: 'S045', CREDIT_RATING: 'B' },
+      { APPROVER_TYPE_NAME: 'Manager Approve (Commercial)', APPROVAL_TYPE_NAME: 'Pending', APPROVER_NAME: 'NJ-NARONGRIT', SORTING: 3, CURRENT_CYCLE: true, CREDIT_LIMIT: 250000, CREDIT_TERM: 'C000 - 0 days cash on delivery', CREDIT_RATING: '', COMMENT: 'Comment Test', INCLUDED_CLEAR_OUTSTANDING_BALANCE: 'Yes', INCLUDED_WITHIN_APPROVED_LIMIT: 'Yes', INCLUDED_BANK_GUARANTEE: 'Yes', BANK_GUARANTEE_AMOUNT: 777771, INCLUDED_CASH_DEPOSIT: 'Yes', CASH_DEPOSIT_AMOUNT: 88882, TEMPORARY: 'Yes', PERMANENT: 'No', VALID_FROM: '06 Aug 2026, 12:00 AM', VALID_TO: '30 Aug 2026, 12:00 AM' },
+    ]);
+
+    expect(model.suggestedCreditDetails).toEqual({
+      creditTerm: 'C000 - 0 days cash on delivery',
+      creditLimit: '250,000.00',
+      creditRating: '-',
+      temporaryYes: true,
+      permanentYes: false,
+      validFrom: '06 Aug 2026, 12:00 AM',
+      validTo: '30 Aug 2026, 12:00 AM',
+    });
+    expect(model.creditDetailsSummary).toEqual([
+      { stepName: 'Requester', step: 1, approver: 'BAE', status: 'Requested', isCurrentStep: false, isLastActionedStep: false },
+      { stepName: 'Credit Team', step: 2, approver: 'NUT', status: 'Suggested', isCurrentStep: false, isLastActionedStep: true },
+      { stepName: 'Manager Approve (Commercial)', step: 3, approver: 'NJ-NARONGRIT', status: 'Pending', isCurrentStep: true, isLastActionedStep: false },
+    ]);
+    expect(model.currentStep).toEqual(expect.objectContaining({
+      approver: 'NJ-NARONGRIT',
+      comment: 'Comment Test',
+      creditLimit: '250,000.00',
+      creditTerm: 'C000 - 0 days cash on delivery',
+      creditRating: '-',
+      bankGuaranteeAmount: '777,771.00',
+      cashDepositAmount: '88,882.00',
+      clearOutstandingBalanceYes: true,
+      withinApprovedLimitYes: true,
+    }));
+    expect(model.lastActionedStep).toEqual(expect.objectContaining({
+      approver: 'NUT',
+      clearOutstandingBalanceYes: false,
+    }));
+  });
+
+  test('uses dash values for current step when approval history is empty', () => {
+    const model = mapRequestToEmailModel({});
+
+    expect(model.currentStep).toEqual(expect.objectContaining({
+      comment: '-',
+      creditLimit: '-',
+      cashDepositAmount: '-',
+    }));
+    expect(model.suggestedCreditDetails).toEqual({
+      creditTerm: '-',
+      creditLimit: '-',
+      creditRating: '-',
+      temporaryYes: false,
+      permanentYes: false,
+      validFrom: '-',
+      validTo: '-',
+    });
+    expect(model.creditDetailsSummary).toEqual([]);
+  });
+
   test('loads a request with ORM associations', async () => {
     const request = { CUSTOMER_CUSTOMER_TYPE_EXTER: 'External' };
     const findOne = jest.fn().mockResolvedValue(request);
@@ -103,6 +194,8 @@ describe('requestEmailModelService', () => {
     getModels.mockReturnValue({ Request, Rating, Term, Size });
 
     await getRequestEmailModel('request-1', 'Approver');
+
+    expect(listApprovalHistory).toHaveBeenCalledWith('request-1');
 
     expect(findOne).toHaveBeenCalledWith(expect.objectContaining({
       where: { ID: 'request-1', ENABLED: true },

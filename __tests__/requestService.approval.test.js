@@ -275,6 +275,17 @@ describe('requestService.submitRequest', () => {
     expect(getDatabase().transaction).not.toHaveBeenCalled();
   });
 
+  it('requires approval steps when only a suggested rating is included', async () => {
+    const command = submitCommand([]);
+    command.requestedDetails.IS_TERM_REQUESTED = false;
+    command.requestedDetails.IS_LIMIT_REQUESTED = false;
+    command.creditSuggestion.PROPOSED_RATING_ID = 'rating-1';
+
+    await expect(requestService.submitRequest(requestId, command, updatedBy))
+      .rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
+    expect(getDatabase().transaction).not.toHaveBeenCalled();
+  });
+
   it('rejects a submit step without an approver before opening a transaction', async () => {
     await expect(requestService.submitRequest(
       requestId,
@@ -360,6 +371,37 @@ describe('requestService.submitRequest', () => {
       { transaction },
     );
     expect(transaction.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates an approval workflow for a suggested-rating-only submission', async () => {
+    const command = submitCommand([{
+      approverTypeId: 'type-1', approverId: '456', approvalStep: 1, sorting: 1,
+    }]);
+    command.requestedDetails.IS_TERM_REQUESTED = false;
+    command.requestedDetails.IS_LIMIT_REQUESTED = false;
+    command.creditSuggestion.PROPOSED_RATING_ID = 'rating-1';
+    database.query
+      .mockResolvedValueOnce([{ ID: 'type-1' }])
+      .mockResolvedValueOnce([{ EMP_CODE: 456 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await requestService.submitRequest(requestId, command, updatedBy);
+
+    expect(requestRecord.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        STATUS_ID: '4ba2cdc6-47aa-41bd-99a0-79e1e6b0831b',
+        IS_TERM_REQUESTED: false,
+        IS_LIMIT_REQUESTED: false,
+      }),
+      { transaction },
+    );
+    const insertCall = database.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO APPROVALS'));
+    expect(insertCall[1].replacements).toEqual(expect.objectContaining({
+      ratingId: 'rating-1',
+      limitAmount: null,
+      termId: null,
+    }));
   });
 
   it('rolls back request changes when approval insertion fails', async () => {

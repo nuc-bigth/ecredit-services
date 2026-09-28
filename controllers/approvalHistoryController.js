@@ -1,4 +1,5 @@
 const requestService = require('../services/requestService');
+const { notifyBestEffort } = require('../services/requestWorkflowNotificationService');
 
 async function listApprovalHistory(req, res, next) {
   try {
@@ -39,6 +40,14 @@ async function submitRequest(req, res, next) {
       throw error;
     }
     const request = await requestService.submitRequest(req.params.id, req.body, updatedBy);
+    await notifyBestEffort({
+      event: 'submit',
+      requestId: req.params.id,
+      environment: process.env.NODE_ENV,
+      actorEmail: req.user?.email,
+      actorName: req.user?.displayName,
+      user: req.user,
+    });
     res.status(200).json({ success: true, data: request, correlationId });
   } catch (error) {
     next(error);
@@ -64,6 +73,16 @@ async function processApprovalAction(req, res, next) {
       updatedBy,
       isSystemAdmin,
     );
+    if (['approve', 'reject'].includes(req.body?.action)) {
+      await notifyBestEffort({
+        event: req.body.action,
+        requestId: req.params.id,
+        environment: process.env.NODE_ENV,
+        actorEmail: req.user?.email,
+        actorName: req.user?.displayName,
+        user: req.user,
+      });
+    }
     res.status(200).json({ success: true, data: request, correlationId });
   } catch (error) {
     next(error);

@@ -496,6 +496,7 @@ async function listApprovalHistory(requestId) {
         '0.00' AS CASH_DEPOSIT_AMOUNT,
         CAST(TB2.EMP_CODE AS VARCHAR(36)) COLLATE DATABASE_DEFAULT AS APPROVER_ID,
         CONCAT(TB2.INITIALS, '-', TB2.USERNAME) COLLATE DATABASE_DEFAULT AS APPROVER_NAME,
+        TB2.CURRENT_EMAIL COLLATE DATABASE_DEFAULT AS APPROVER_EMAIL,
         FORMAT(TB1.CREATED_DATE, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS LAST_UPDATE_DATE,
         CONCAT(TB3.INITIALS, '-', TB3.USERNAME) COLLATE DATABASE_DEFAULT AS LAST_UPDATE_BY,
         (CASE WHEN TB1.IS_PERMANENT_REQUESTED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS PERMANENT,
@@ -503,6 +504,7 @@ async function listApprovalHistory(requestId) {
         FORMAT(TB1.REQUESTED_VALID_FROM, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_FROM,
         FORMAT(TB1.REQUESTED_VALID_TO, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_TO,
         CAST(NULL AS VARCHAR(255)) COLLATE DATABASE_DEFAULT AS PARALLEL_KEYS,
+        1 AS APPROVAL_STEP,
         1 AS SORTING
       FROM REQUESTS AS TB1
       LEFT JOIN S_EMPLOYEE1 AS TB2 ON TB2.EMP_CODE = TB1.REQUESTED_BY
@@ -532,6 +534,7 @@ async function listApprovalHistory(requestId) {
         TB1.PROPOSED_CASH_DEPOSIT_AMOUNT AS CASH_DEPOSIT_AMOUNT,
         CAST(TB2.EMP_CODE AS VARCHAR(36)) COLLATE DATABASE_DEFAULT AS APPROVER_ID,
         CONCAT(TB2.INITIALS, '-', TB2.USERNAME) COLLATE DATABASE_DEFAULT AS APPROVER_NAME,
+        TB2.CURRENT_EMAIL COLLATE DATABASE_DEFAULT AS APPROVER_EMAIL,
         FORMAT(TB1.SUBMITTED_DATE, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS LAST_UPDATE_DATE,
         CONCAT(TB3.INITIALS, '-', TB3.USERNAME) COLLATE DATABASE_DEFAULT AS LAST_UPDATE_BY,
         (CASE WHEN TB1.IS_PERMANENT_PROPOSED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS PERMANENT,
@@ -539,6 +542,7 @@ async function listApprovalHistory(requestId) {
         FORMAT(TB1.PROPOSED_VALID_FROM, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_FROM,
         FORMAT(TB1.PROPOSED_VALID_TO, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_TO,
         CAST(NULL AS VARCHAR(255)) COLLATE DATABASE_DEFAULT AS PARALLEL_KEYS,
+        2 AS APPROVAL_STEP,
         2 AS SORTING
       FROM REQUESTS AS TB1
       LEFT JOIN S_EMPLOYEE1 AS TB2 ON TB2.EMP_CODE = TB1.SUBMITTED_BY
@@ -568,6 +572,7 @@ async function listApprovalHistory(requestId) {
         TB1.CASH_DEPOSIT_AMOUNT AS CASH_DEPOSIT_AMOUNT,
         CAST(TB4.EMP_CODE AS VARCHAR(36)) COLLATE DATABASE_DEFAULT AS APPROVER_ID,
         CONCAT(TB4.INITIALS, '-', TB4.USERNAME) COLLATE DATABASE_DEFAULT AS APPROVER_NAME,
+        TB4.CURRENT_EMAIL COLLATE DATABASE_DEFAULT AS APPROVER_EMAIL,
         FORMAT(TB1.UPDATED_DATE, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS LAST_UPDATE_DATE,
         CONCAT(TB5.INITIALS, '-', TB5.USERNAME) COLLATE DATABASE_DEFAULT AS LAST_UPDATE_BY,
         (CASE WHEN TB1.IS_PERMANENT = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS PERMANENT,
@@ -575,6 +580,7 @@ async function listApprovalHistory(requestId) {
         FORMAT(TB1.VALID_FROM, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_FROM,
         FORMAT(TB1.VALID_TO, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS VALID_TO,
         CAST(TB2.PARALLEL_KEYS AS VARCHAR(255)) COLLATE DATABASE_DEFAULT AS PARALLEL_KEYS,
+        TB1.APPROVAL_STEP AS APPROVAL_STEP,
         TB1.SORTING + 2 AS SORTING
       FROM APPROVALS AS TB1
       LEFT JOIN APPROVER_TYPES AS TB2 ON TB1.APPROVER_TYPE_ID = TB2.ID
@@ -608,7 +614,7 @@ async function getApprovalSubmitOptions(requestId) {
 
   const [approvers, approverTypes, defaultApprovers] = await Promise.all([
     database.query(
-      `SELECT EMP_CODE AS ID, CONCAT(INITIALS, '-', USERNAME) AS NAME
+      `SELECT EMP_CODE AS ID, CONCAT(INITIALS, '-', USERNAME) AS NAME, CURRENT_EMAIL AS EMAIL
        FROM S_EMPLOYEE1
        WHERE WORK_STATUS = '3' AND CURRENT_EMAIL IS NOT NULL
        ORDER BY INITIALS ASC`,
@@ -625,6 +631,8 @@ async function getApprovalSubmitOptions(requestId) {
       `SELECT TB1.ID, TB1.NAME, TB1.DESCRIPTION, TB1.APPROVER_ID, TB1.APPROVER_TYPE_ID
        FROM APPROVERS AS TB1
        LEFT JOIN APPROVER_TYPES AS TB2 ON TB1.APPROVER_TYPE_ID = TB2.ID
+       WHERE TB1.ENABLED = '1'
+         AND TB2.ENABLED = '1'
        ORDER BY TB2.SORTING ASC`,
       { type: QueryTypes.SELECT },
     ),
@@ -683,7 +691,9 @@ async function submitRequest(id, command, updatedBy) {
   const scoringUpdate = normalizeRequestScoringAndPayment(command.scoringAndPayment ?? {});
   const requestedUpdate = normalizeRequestRequestedDetails(command.requestedDetails ?? {});
   const approvalValues = { ...creditUpdate };
-  const requiresApproval = requestedUpdate.IS_TERM_REQUESTED || requestedUpdate.IS_LIMIT_REQUESTED;
+  const requiresApproval = requestedUpdate.IS_TERM_REQUESTED
+    || requestedUpdate.IS_LIMIT_REQUESTED
+    || Boolean(creditUpdate.PROPOSED_RATING_ID);
   const normalizedSteps = normalizeSubmitSteps(command.steps ?? []);
   if (requiresApproval && !normalizedSteps.length) {
     throw validationError('At least one approval step is required.');
@@ -1621,6 +1631,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
 module.exports = {
   listRequests,
   getRequestById,
+  getCompanyCode,
   listApprovalHistory,
   getApprovalSubmitOptions,
   submitRequest,

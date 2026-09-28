@@ -1,5 +1,6 @@
 const logger = require('../../config/logger');
 const requestService = require('../../services/requestService');
+const { notifyBestEffort } = require('../../services/requestWorkflowNotificationService');
 
 async function listRequests(req, res, next) {
   try {
@@ -103,6 +104,15 @@ async function cancelRequest(req, res, next) {
       error.code = 'RESOURCE_NOT_FOUND';
       throw error;
     }
+
+    await notifyBestEffort({
+      event: 'cancel',
+      requestId: req.params.id,
+      environment: process.env.NODE_ENV,
+      actorEmail: req.user?.email,
+      actorName: req.user?.displayName,
+      user: req.user,
+    });
 
     res.status(200).json({ success: true, data: { id: req.params.id }, correlationId });
 

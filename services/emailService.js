@@ -7,6 +7,8 @@ const { createEmailLog, updateEmailLog } = require('./emailLogService');
 const SUPPORTED_ENVIRONMENTS = new Set(['dev', 'qas', 'prd']);
 const MODEL_KEYS = [
   'dear',
+  'requestNo',
+  'crmNo',
   'requestType',
   'companyName',
   'soldToNo',
@@ -24,6 +26,10 @@ const MODEL_KEYS = [
   'growth',
   'liquidity',
   'leverage',
+  'existingProfitability',
+  'existingGrowth',
+  'existingLiquidity',
+  'existingLeverage',
   'scoringNotes',
   'scoringClassificationNa',
   'scoringClassificationGovernment',
@@ -43,6 +49,11 @@ const MODEL_KEYS = [
   'creditLimitExisting',
   'creditLimitRequested',
   'creditLimitProposed',
+  'creditDetailsMovements',
+  'creditDetailsSummary',
+  'suggestedCreditDetails',
+  'currentStep',
+  'lastActionedStep',
 ];
 
 function missingValue(value) {
@@ -114,7 +125,7 @@ function resolveTemplate(template) {
 }
 
 function createEmailService({ environment = config.environment, bcc = config.email.bcc, transporter } = {}) {
-  async function sendEmail({ template, subject, model, recipients, actorEmail, requestId, user, resendOf, effectiveRecipients, effectiveBcc }) {
+  async function sendEmail({ template, subject, model, recipients, actorEmail, requestId, user, resendOf, effectiveRecipients, effectiveBcc, intendedRecipients }) {
     const normalizedEnvironment = String(environment).toLowerCase();
     if (!SUPPORTED_ENVIRONMENTS.has(normalizedEnvironment)) throw new Error('Unsupported email environment.');
     if (missingValue(subject)) throw new Error('subject is required.');
@@ -125,12 +136,27 @@ function createEmailService({ environment = config.environment, bcc = config.ema
     if (!bccRecipients.length) throw new Error('EMAIL_BCC is required.');
 
     const normalizedModel = normalizeModel(model);
-    const emailPayload = { requestId, user, environment: normalizedEnvironment, template: resolvedTemplate, baseSubject: String(subject).trim(), subject: `${subjectPrefix(normalizedEnvironment)} - ${String(subject).trim()}`, model: normalizedModel, recipients: resolvedRecipients, bcc: bccRecipients, resendOf };
+    const emailSubject = `${subjectPrefix(normalizedEnvironment)} - ${String(subject).trim()}`;
+    const emailPayload = { requestId, user, environment: normalizedEnvironment, template: resolvedTemplate, baseSubject: String(subject).trim(), subject: emailSubject, model: normalizedModel, recipients: resolvedRecipients, bcc: bccRecipients, resendOf };
+    const debugRecipients = intendedRecipients || recipients || resolvedRecipients;
+    const templateDebugRecipients = {
+      to: normalizeEmailList(debugRecipients.to, 'intendedRecipients.to'),
+      cc: normalizeEmailList(debugRecipients.cc, 'intendedRecipients.cc'),
+    };
+    const templateContext = normalizedEnvironment === 'prd' ? normalizedModel : {
+      ...normalizedModel,
+      showEmailDebugInfo: true,
+      emailDebugInfo: {
+        subject: emailSubject,
+        to: templateDebugRecipients.to,
+        cc: templateDebugRecipients.cc,
+      },
+    };
     let emailLog = null;
     if (requestId && isModelsInitialized()) emailLog = await createEmailLog({ ...emailPayload, status: 'PENDING' });
     const mailTransporter = transporter || await getEmailTransporter();
     try {
-      const result = await mailTransporter.sendMail({ from: config.email.from, to: resolvedRecipients.to, cc: resolvedRecipients.cc, bcc: bccRecipients, subject: emailPayload.subject, template: resolvedTemplate, context: normalizedModel });
+      const result = await mailTransporter.sendMail({ from: config.email.from, to: resolvedRecipients.to, cc: resolvedRecipients.cc, bcc: bccRecipients, subject: emailPayload.subject, template: resolvedTemplate, context: templateContext });
       if (emailLog) await updateEmailLog(emailLog, { ...emailPayload, status: 'SENT', providerResult: result });
       return result;
     } catch (error) {

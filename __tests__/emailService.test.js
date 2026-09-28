@@ -39,6 +39,69 @@ describe('emailService', () => {
       bcc: ['audit@example.com'],
       template: 'request-completed',
     }));
+    if (environment !== 'prd') {
+      expect(transporter.sendMail.mock.calls[0][0].context.showEmailDebugInfo).toBe(true);
+    } else {
+      expect(transporter.sendMail.mock.calls[0][0].context).not.toHaveProperty('showEmailDebugInfo');
+    }
+  });
+
+  test('adds resolved test recipient details to DEV template context', async () => {
+    const transporter = createTransporter();
+    await createEmailService({ environment: 'dev', transporter }).sendEmail({
+      template: 'request-completed',
+      subject: 'Subject',
+      model,
+      actorEmail: 'actor@example.com',
+    });
+
+    expect(transporter.sendMail.mock.calls[0][0].context).toEqual(expect.objectContaining({
+      showEmailDebugInfo: true,
+      emailDebugInfo: {
+        subject: '[DEV e-Credit] - Subject',
+        to: ['actor@example.com'],
+        cc: [],
+      },
+    }));
+  });
+
+  test('shows intended recipients in DEV debug context without changing delivery', async () => {
+    const transporter = createTransporter();
+    await createEmailService({ environment: 'dev', transporter }).sendEmail({
+      template: 'request-completed',
+      subject: 'Workflow',
+      model,
+      recipients: { to: ['approver@example.com'], cc: ['manager@example.com'] },
+      intendedRecipients: { to: ['approver@example.com'], cc: ['manager@example.com'] },
+      actorEmail: 'actor@example.com',
+    });
+
+    expect(transporter.sendMail.mock.calls[0][0]).toEqual(expect.objectContaining({
+      to: ['actor@example.com'],
+      cc: [],
+      context: expect.objectContaining({
+        emailDebugInfo: {
+          subject: '[DEV e-Credit] - Workflow',
+          to: ['approver@example.com'],
+          cc: ['manager@example.com'],
+        },
+      }),
+    }));
+  });
+
+  test('does not add test recipient details to PRD template context', async () => {
+    const transporter = createTransporter();
+    await createEmailService({ environment: 'prd', transporter }).sendEmail({
+      template: 'request-completed',
+      subject: 'Subject',
+      model,
+      recipients: { to: ['recipient@example.com'], cc: ['copy@example.com'] },
+    });
+
+    expect(transporter.sendMail.mock.calls[0][0].context).not.toEqual(expect.objectContaining({
+      showEmailDebugInfo: true,
+      emailDebugInfo: expect.anything(),
+    }));
   });
 
   test('normalizes omitted fields to dash', async () => {
@@ -87,5 +150,17 @@ describe('emailService', () => {
   test('exposes the expected prefixes and model normalization', () => {
     expect(subjectPrefix('dev')).toBe('[DEV e-Credit]');
     expect(normalizeModel({ opinion: null }).opinion).toBe('-');
+  });
+
+  test('normalizes the new approval summary fields recursively', () => {
+    expect(normalizeModel({
+      creditDetailsSummary: [{ step: 1, approver: null, status: 'Pending' }],
+      suggestedCreditDetails: { creditLimit: null },
+      currentStep: { comment: null },
+    })).toEqual(expect.objectContaining({
+      creditDetailsSummary: [{ step: 1, approver: '-', status: 'Pending' }],
+      suggestedCreditDetails: { creditLimit: '-' },
+      currentStep: { comment: '-' },
+    }));
   });
 });

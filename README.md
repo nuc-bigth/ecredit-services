@@ -151,8 +151,13 @@ The template and service fill omitted values with `-`. The supported model keys 
 `customerType`, `companyRegisterDate`, `registeredCapital`, `companySize`,
 `creditRatingScore`, `profitability`, `growth`, `liquidity`, `leverage`, `amountBank`,
 `amountDeposit`, `opinion`, `creditTermExisting`, `creditTermRequested`,
-`creditTermProposed`, `creditLimitExisting`, `creditLimitRequested`, and
-`creditLimitProposed`.
+`creditTermProposed`, `creditLimitExisting`, `creditLimitRequested`,
+`creditLimitProposed`, and `creditDetailsMovements` (the ordered Movement history
+entries, including parallel approval step numbers, approver details, comments,
+credit values, conditions, and adjustment details), `creditDetailsSummary`,
+`suggestedCreditDetails`, `currentStep`, and `lastActionedStep` (the approval
+summary, the latest current-cycle credit suggestion, the current pending step,
+and the previous actioned step shown for decision support).
 
 Recipient policy:
 
