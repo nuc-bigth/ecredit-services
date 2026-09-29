@@ -5,6 +5,7 @@ const { getDatabase } = require('../config/database');
 const { QueryTypes } = require('sequelize');
 
 const PENDING_APPROVAL_TYPE_ID = 'b4c27a6c-ab7c-4ce5-b885-997f9104c23d';
+const WAITING_APPROVAL_STATUS_ID = '4ba2cdc6-47aa-41bd-99a0-79e1e6b0831b';
 const ACTION_TYPE_IDS = {
   approve: 'aab5ce03-1c54-48c8-8305-6b1a017b43fd',
   reject: 'b08a2acd-e173-4de0-a528-1533b89c1c21',
@@ -54,6 +55,10 @@ async function findPendingApproval(payload, transaction) {
      FROM APPROVALS AS TB1
      LEFT JOIN APPROVER_TYPES AS TB2 ON TB2.ID = TB1.APPROVER_TYPE_ID
      LEFT JOIN S_EMPLOYEE1 AS TB3 ON TRY_CONVERT(BIGINT, TB3.EMP_CODE) = TRY_CONVERT(BIGINT, TB1.APPROVER_ID)
+     INNER JOIN REQUESTS AS TB4
+       ON CONVERT(VARCHAR(36), TB4.ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), TB1.REQUEST_ID) COLLATE DATABASE_DEFAULT
+       AND TB4.ENABLED = '1'
+       AND CONVERT(VARCHAR(36), TB4.STATUS_ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), :waitingStatusId) COLLATE DATABASE_DEFAULT
      WHERE CONVERT(VARCHAR(36), TB1.ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), :approvalId) COLLATE DATABASE_DEFAULT
        AND CONVERT(VARCHAR(36), TB1.REQUEST_ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), :requestId) COLLATE DATABASE_DEFAULT
        AND TRY_CONVERT(BIGINT, TB1.APPROVER_ID) = TRY_CONVERT(BIGINT, :approverId)
@@ -65,6 +70,7 @@ async function findPendingApproval(payload, transaction) {
         requestId: payload.requestId,
         approverId: payload.approverId,
         pendingTypeId: PENDING_APPROVAL_TYPE_ID,
+        waitingStatusId: WAITING_APPROVAL_STATUS_ID,
       },
       type: QueryTypes.SELECT,
       transaction,
@@ -122,7 +128,13 @@ async function confirmEmailApprovalAction(token, comment) {
          AND CONVERT(VARCHAR(36), REQUEST_ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), :requestId) COLLATE DATABASE_DEFAULT
          AND TRY_CONVERT(BIGINT, APPROVER_ID) = TRY_CONVERT(BIGINT, :approverId)
          AND ENABLED = '1'
-         AND CONVERT(VARCHAR(36), APPROVAL_TYPE_ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), :pendingTypeId) COLLATE DATABASE_DEFAULT`,
+         AND CONVERT(VARCHAR(36), APPROVAL_TYPE_ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), :pendingTypeId) COLLATE DATABASE_DEFAULT
+         AND EXISTS (
+           SELECT 1 FROM REQUESTS AS TB4
+           WHERE CONVERT(VARCHAR(36), TB4.ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), APPROVALS.REQUEST_ID) COLLATE DATABASE_DEFAULT
+             AND TB4.ENABLED = '1'
+             AND CONVERT(VARCHAR(36), TB4.STATUS_ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), :waitingStatusId) COLLATE DATABASE_DEFAULT
+         )`,
       {
         replacements: {
           actionTypeId: ACTION_TYPE_IDS[payload.action],
@@ -132,12 +144,41 @@ async function confirmEmailApprovalAction(token, comment) {
           requestId: payload.requestId,
           approverId: payload.approverId,
           pendingTypeId: PENDING_APPROVAL_TYPE_ID,
+          waitingStatusId: WAITING_APPROVAL_STATUS_ID,
         },
         type: QueryTypes.UPDATE,
         transaction,
       },
     );
     if (!affectedRows) throw actionError('This approval action is no longer available.');
+
+    if (payload.action === 'approve') {
+      await database.query(
+        `UPDATE APPROVALS
+         SET APPROVAL_TYPE_ID = :actionTypeId,
+             DESCRIPTION = CASE WHEN :comment = '' THEN DESCRIPTION ELSE :comment END,
+             UPDATED_BY = :updatedBy,
+             UPDATED_DATE = GETDATE()
+         WHERE CONVERT(VARCHAR(36), REQUEST_ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), :requestId) COLLATE DATABASE_DEFAULT
+           AND TRY_CONVERT(BIGINT, APPROVER_ID) = TRY_CONVERT(BIGINT, :approverId)
+           AND ENABLED = '1'
+           AND CONVERT(VARCHAR(36), APPROVAL_TYPE_ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), :pendingTypeId) COLLATE DATABASE_DEFAULT
+           AND CONVERT(VARCHAR(36), ID) COLLATE DATABASE_DEFAULT <> CONVERT(VARCHAR(36), :approvalId) COLLATE DATABASE_DEFAULT`,
+        {
+          replacements: {
+            actionTypeId: ACTION_TYPE_IDS.approve,
+            comment: normalizedComment,
+            updatedBy: payload.approverId,
+            requestId: payload.requestId,
+            approverId: payload.approverId,
+            pendingTypeId: PENDING_APPROVAL_TYPE_ID,
+            approvalId: payload.approvalId,
+          },
+          type: QueryTypes.UPDATE,
+          transaction,
+        },
+      );
+    }
 
     if (payload.action === 'backward') {
       await database.query(

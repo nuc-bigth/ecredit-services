@@ -53,6 +53,7 @@ function submitCommand(steps) {
       IS_TERM_REQUESTED: true,
       IS_LIMIT_REQUESTED: true,
     },
+    bdsReviewApproverId: String(updatedBy),
     steps,
   };
 }
@@ -108,6 +109,8 @@ describe('requestService.processApprovalAction', () => {
       isSystemAdmin: 0,
       waitingStatusId: '4ba2cdc6-47aa-41bd-99a0-79e1e6b0831b',
       pendingApprovalTypeId: 'b4c27a6c-ab7c-4ce5-b885-997f9104c23d',
+      allowFinalSave: 1,
+      finalStatusId: '014e8e8b-42cf-4b2f-8cae-e395e26efbcd',
     });
     expect(approvalUpdate).toHaveBeenCalledWith(
       expect.not.objectContaining({ APPROVAL_TYPE_ID: expect.anything() }),
@@ -138,8 +141,9 @@ describe('requestService.processApprovalAction', () => {
 
   it('changes approval status when approving the selected approval ID', async () => {
     database.query
-      .mockResolvedValueOnce([{ ID: approvalId }])
+      .mockResolvedValueOnce([{ ID: approvalId, APPROVER_ID: 67890 }])
       .mockResolvedValueOnce([{ ID: 'approved-type' }])
+      .mockResolvedValueOnce([1])
       .mockResolvedValueOnce([{ TOTAL: 0 }]);
 
     await requestService.processApprovalAction(
@@ -155,6 +159,14 @@ describe('requestService.processApprovalAction', () => {
       expect.objectContaining({ STATUS_ID: finalStatusId }),
       expect.objectContaining({ where: { ID: requestId, ENABLED: true }, transaction }),
     );
+    expect(database.query.mock.calls[2][0]).toContain('TRY_CONVERT(BIGINT, APPROVER_ID)');
+    expect(database.query.mock.calls[2][0]).not.toContain('MIN(APPROVAL_STEP)');
+    expect(database.query.mock.calls[2][1].replacements.id).toBe(requestId);
+    expect(database.query.mock.calls[2][1].replacements.updatedBy).toBe(updatedBy);
+    expect(database.query.mock.calls[2][1].replacements.approverId).toBe(67890);
+    expect(database.query.mock.calls[2][1].replacements.approvedTypeId).toBe('approved-type');
+    expect(database.query.mock.calls[2][1].replacements.pendingApprovalTypeId)
+      .toBe('b4c27a6c-ab7c-4ce5-b885-997f9104c23d');
     expect(transaction.commit).toHaveBeenCalledTimes(1);
   });
 
@@ -453,6 +465,7 @@ describe('requestService.submitRequest', () => {
     const command = submitCommand([{
       approverTypeId: 'type-1', approverId: '456', approvalStep: 1, sorting: 1,
     }]);
+    command.bdsReviewApproverId = '456';
     command.creditSuggestion = {
       ...command.creditSuggestion,
       PROPOSED_TERM_ID: 'term-1',
@@ -493,7 +506,10 @@ describe('requestService.submitRequest', () => {
       updatedBy,
     }));
     expect(requestRecord.update).toHaveBeenCalledWith(
-      expect.objectContaining({ STATUS_ID: '4ba2cdc6-47aa-41bd-99a0-79e1e6b0831b' }),
+      expect.objectContaining({
+        STATUS_ID: '4ba2cdc6-47aa-41bd-99a0-79e1e6b0831b',
+        SUBMITTED_BY: 456,
+      }),
       { transaction },
     );
     expect(transaction.commit).toHaveBeenCalledTimes(1);

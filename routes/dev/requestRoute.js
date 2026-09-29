@@ -31,6 +31,7 @@ router.patch('/:id/customer-info', authenticationMiddleware, requestController.u
 router.patch('/:id/credit-suggestion', authenticationMiddleware, requestController.updateRequestCreditSuggestion);
 router.patch('/:id/scoring-payment', authenticationMiddleware, requestController.updateRequestScoringAndPayment);
 router.patch('/:id/requested-details', authenticationMiddleware, requestController.updateRequestRequestedDetails);
+router.patch('/:id/final-approval', authenticationMiddleware, requestController.saveFinalApproval);
 router.post('/:id/clone-data', authenticationMiddleware, requestController.cloneRequestData);
 router.patch('/:id/cancel', authenticationMiddleware, requestController.cancelRequest);
 router.post('/:id/approval-action', authenticationMiddleware, approvalHistoryController.processApprovalAction);

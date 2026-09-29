@@ -12,7 +12,6 @@ const WAITING_APPROVAL_STATUS_ID = '4ba2cdc6-47aa-41bd-99a0-79e1e6b0831b';
 const FINAL_STATUS_ID = '014e8e8b-42cf-4b2f-8cae-e395e26efbcd';
 const REJECTED_STATUS_ID = '94589a22-12e5-4298-aa30-06295acbe1b9';
 const PENDING_APPROVAL_TYPE_ID = 'b4c27a6c-ab7c-4ce5-b885-997f9104c23d';
-const BDS_REVIEW_APPROVER_TYPE_ID = 'fca8c4fa-51e8-4c7d-95ac-274d62ba5d7f';
 const SMALL_CUSTOMER_SIZE_ID = 'd8ce72cf-0228-4293-9699-311eeecb926d';
 const MEDIUM_CUSTOMER_SIZE_ID = '9d9d84c7-8926-4629-b06f-2cb4d434fc33';
 const LARGE_CUSTOMER_SIZE_ID = '4b2d23db-96d6-4cef-b6ae-10a97a8ce1cb';
@@ -292,6 +291,8 @@ function mapRequest(request) {
     PROPOSED_DISPLAYED_NOTES: request.PROPOSED_DISPLAYED_NOTES || '',
     PROPOSED_NOTES: request.PROPOSED_NOTES || '',
     REF_FINANCIAL_STATEMENT_FY: formatDate(request.REF_FINANCIAL_STATEMENT_FY),
+    SUBMITTED_BY: request.SUBMITTED_BY === null || request.SUBMITTED_BY === undefined
+      ? null : Number(request.SUBMITTED_BY),
     SCORING_PROFITABILITY: request.SCORING_PROFITABILITY?.toString() || '-',
     SCORING_GROWTH: request.SCORING_GROWTH?.toString() || '-',
     SCORING_LIQUIDITY: request.SCORING_LIQUIDITY?.toString() || '-',
@@ -701,6 +702,11 @@ async function submitRequest(id, command, updatedBy) {
     || requestedUpdate.IS_LIMIT_REQUESTED
     || Boolean(creditUpdate.PROPOSED_RATING_ID);
   const normalizedSteps = normalizeSubmitSteps(command.steps ?? []);
+  const submittedByValue = command.bdsReviewApproverId === undefined
+    ? String(updatedBy)
+    : String(command.bdsReviewApproverId ?? '').trim();
+  if (!/^\d+$/.test(submittedByValue)) throw validationError('BDS Review approver is required.');
+  const submittedBy = Number(submittedByValue);
   if (requiresApproval && !normalizedSteps.length) {
     throw validationError('At least one approval step is required.');
   }
@@ -804,7 +810,7 @@ async function submitRequest(id, command, updatedBy) {
       ...requestedUpdate,
       STATUS_ID: requiresApproval ? WAITING_APPROVAL_STATUS_ID : COMPLETED_STATUS_ID,
       SUBMITTED_DATE: Request.sequelize.fn('GETDATE'),
-      SUBMITTED_BY: updatedBy,
+      SUBMITTED_BY: submittedBy,
       UPDATED_BY: updatedBy,
       UPDATED_DATE: Request.sequelize.fn('GETDATE'),
     }, { transaction });
@@ -948,12 +954,6 @@ async function updateRequestCustomerInfo(id, payload, updatedBy) {
   const request = await Request.findOne({ where: { ID: id, ENABLED: true } });
 
   if (!request) return null;
-  if (request.STATUS_ID === CANCELLED_STATUS_ID || request.STATUS_ID === COMPLETED_STATUS_ID) {
-    const error = new Error('Customer information cannot be edited after this request is cancelled or completed.');
-    error.statusCode = 409;
-    error.code = 'REQUEST_NOT_EDITABLE';
-    throw error;
-  }
   if (update.CUSTOMER_SIZE_ID) {
     const size = await Size.findOne({ where: { ID: update.CUSTOMER_SIZE_ID, ENABLED: '1' } });
     if (!size) throw validationError('CUSTOMER_SIZE_ID must reference an enabled size.');
@@ -1076,12 +1076,6 @@ async function updateRequestCreditSuggestion(id, payload, updatedBy) {
   const request = await Request.findOne({ where: { ID: id, ENABLED: true } });
 
   if (!request) return null;
-  if (request.STATUS_ID === CANCELLED_STATUS_ID || request.STATUS_ID === COMPLETED_STATUS_ID) {
-    const error = new Error('Credit suggestions cannot be edited after this request is cancelled or completed.');
-    error.statusCode = 409;
-    error.code = 'REQUEST_NOT_EDITABLE';
-    throw error;
-  }
   if (update.PROPOSED_TERM_ID) {
     const term = await Term.findByPk(update.PROPOSED_TERM_ID);
     if (!term) throw validationError('PROPOSED_TERM_ID must reference a valid term.');
@@ -1212,12 +1206,6 @@ async function updateRequestScoringAndPayment(id, payload, updatedBy) {
   const request = await Request.findOne({ where: { ID: id, ENABLED: true } });
 
   if (!request) return null;
-  if (request.STATUS_ID === CANCELLED_STATUS_ID || request.STATUS_ID === COMPLETED_STATUS_ID) {
-    const error = new Error('Scoring and payment behavior cannot be edited after this request is cancelled or completed.');
-    error.statusCode = 409;
-    error.code = 'REQUEST_NOT_EDITABLE';
-    throw error;
-  }
   if (update.SCORING_RATING_ID) {
     const rating = await Rating.findOne({ where: { ID: update.SCORING_RATING_ID, ENABLED: '1' } });
     if (!rating) throw validationError('SCORING_RATING_ID must reference an enabled rating.');
@@ -1285,12 +1273,6 @@ async function updateRequestRequestedDetails(id, payload, updatedBy) {
   const update = normalizeRequestRequestedDetails(payload);
   const request = await Request.findOne({ where: { ID: id, ENABLED: true } });
   if (!request) return null;
-  if (request.STATUS_ID === CANCELLED_STATUS_ID || request.STATUS_ID === COMPLETED_STATUS_ID) {
-    const error = new Error('Requested details cannot be edited after this request is cancelled or completed.');
-    error.statusCode = 409;
-    error.code = 'REQUEST_NOT_EDITABLE';
-    throw error;
-  }
   if (update.REQUESTED_TERM_ID) {
     const term = await Term.findByPk(update.REQUESTED_TERM_ID);
     if (!term) throw validationError('REQUESTED_TERM_ID must reference a valid term.');
@@ -1455,6 +1437,85 @@ function normalizeApprovalUpdate(payload) {
   return update;
 }
 
+async function saveFinalApproval(id, payload, updatedBy, isSystemAdmin = false) {
+  const normalizedUpdate = normalizeApprovalUpdate(payload);
+  const { Request } = getModels();
+  const database = getDatabase();
+  const transaction = await database.transaction();
+  try {
+    const permissionRows = await database.query(
+      `SELECT TOP 1 TB1.ID, TB1.APPROVER_ID
+       FROM REQUESTS AS TB1
+       WHERE CONVERT(VARCHAR(36), TB1.ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
+         AND TB1.ENABLED = '1'
+         AND CONVERT(VARCHAR(36), TB1.STATUS_ID) COLLATE DATABASE_DEFAULT
+           = CONVERT(VARCHAR(36), :finalStatusId) COLLATE DATABASE_DEFAULT
+         AND (
+           :isSystemAdmin = 1
+           OR EXISTS (
+             SELECT 1
+             FROM APPROVALS AS TB2
+             WHERE CONVERT(VARCHAR(36), TB2.REQUEST_ID) COLLATE DATABASE_DEFAULT
+                 = CONVERT(VARCHAR(36), TB1.ID) COLLATE DATABASE_DEFAULT
+               AND TRY_CONVERT(BIGINT, TB2.APPROVER_ID) = TRY_CONVERT(BIGINT, :updatedBy)
+               AND TB2.APPROVAL_STEP = 2
+               AND TB2.ENABLED = '1'
+               AND EXISTS (
+                 SELECT 1
+                 FROM APPROVER_TYPES AS TB3
+                 WHERE CONVERT(VARCHAR(36), TB3.ID) COLLATE DATABASE_DEFAULT
+                     = CONVERT(VARCHAR(36), TB2.APPROVER_TYPE_ID) COLLATE DATABASE_DEFAULT
+                   AND TB3.ENABLED = '1'
+                   AND (
+                     TB3.NAME COLLATE DATABASE_DEFAULT LIKE '%BDS%' COLLATE DATABASE_DEFAULT
+                     OR TB3.NAME COLLATE DATABASE_DEFAULT LIKE '%Review%' COLLATE DATABASE_DEFAULT
+                   )
+               )
+           )
+         )`,
+      {
+        replacements: {
+          id,
+          updatedBy,
+          isSystemAdmin: isSystemAdmin ? 1 : 0,
+          finalStatusId: FINAL_STATUS_ID,
+        },
+        type: QueryTypes.SELECT,
+        transaction,
+      },
+    );
+    if (!permissionRows[0]) {
+      const error = new Error('Only a BDS Review approver or System Admin can save final approval data.');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    await Request.update(
+      {
+        APPROVED_LIMIT_AMOUNT: normalizedUpdate.LIMIT_AMOUNT,
+        APPROVED_TERM_ID: normalizedUpdate.TERM_ID,
+        APPROVED_RATING_ID: normalizedUpdate.RATING_ID,
+        APPROVED_VALID_FROM: normalizedUpdate.VALID_FROM
+          ? databaseDateFromYmd(Request.sequelize, normalizedUpdate.VALID_FROM) : null,
+        APPROVED_VALID_TO: normalizedUpdate.VALID_TO
+          ? databaseDateFromYmd(Request.sequelize, normalizedUpdate.VALID_TO) : null,
+        APPROVED_NOTES: normalizedUpdate.DESCRIPTION,
+        IS_PERMANENT_APPROVED: normalizedUpdate.IS_PERMANENT,
+        IS_TEMPORARY_APPROVED: normalizedUpdate.IS_TEMPORARY,
+        UPDATED_BY: updatedBy,
+        UPDATED_DATE: Request.sequelize.fn('GETDATE'),
+      },
+      { where: { ID: id, ENABLED: true }, transaction },
+    );
+    await transaction.commit();
+    return getRequestById(id);
+  } catch (error) {
+    if (!transaction.finished) await transaction.rollback();
+    throw error;
+  }
+}
+
 async function processApprovalAction(id, action, payload, updatedBy, isSystemAdmin = false) {
   if (action === 'finalConfirm' || action === 'finalCancel') {
     return processFinalAction(id, action, payload, updatedBy, isSystemAdmin);
@@ -1482,8 +1543,15 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
              AND TB5.ALLOW_BACKWARD = '1'
          )`
       : '';
+    const finalSavePermissionClause = action === 'save'
+      ? `OR (
+           :allowFinalSave = 1
+           AND CONVERT(VARCHAR(36), TB3.STATUS_ID) COLLATE DATABASE_DEFAULT
+             = CONVERT(VARCHAR(36), :finalStatusId) COLLATE DATABASE_DEFAULT
+         )`
+      : '';
     const pendingApprovals = await database.query(
-      `SELECT TOP 1 TB1.ID
+      `SELECT TOP 1 TB1.ID, TB1.APPROVER_ID
        FROM APPROVALS AS TB1
        INNER JOIN APPROVAL_TYPES AS TB2
          ON CONVERT(VARCHAR(36), TB2.ID) COLLATE DATABASE_DEFAULT
@@ -1495,23 +1563,31 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
            = CONVERT(VARCHAR(36), :approvalId) COLLATE DATABASE_DEFAULT
          AND CONVERT(VARCHAR(36), TB1.REQUEST_ID) COLLATE DATABASE_DEFAULT
            = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
-         AND (TRY_CONVERT(BIGINT, TB1.APPROVER_ID) = TRY_CONVERT(BIGINT, :updatedBy) OR :isSystemAdmin = 1)
+         AND (
+           TRY_CONVERT(BIGINT, TB1.APPROVER_ID) = TRY_CONVERT(BIGINT, :updatedBy)
+           OR :isSystemAdmin = 1
+           ${finalSavePermissionClause}
+         )
          AND TB1.ENABLED = '1'
          AND TB2.ENABLED = '1'
-         AND TB2.NAME COLLATE DATABASE_DEFAULT = 'Pending' COLLATE DATABASE_DEFAULT
-         ${backwardPermissionClause}
-         AND TB1.CREATED_DATE >= TB3.SUBMITTED_DATE
-         AND CONVERT(VARCHAR(36), TB3.STATUS_ID) COLLATE DATABASE_DEFAULT
-           = CONVERT(VARCHAR(36), :waitingStatusId) COLLATE DATABASE_DEFAULT
-         AND TB1.APPROVAL_STEP = (
-           SELECT MIN(TB4.APPROVAL_STEP)
-           FROM APPROVALS AS TB4
-           WHERE CONVERT(VARCHAR(36), TB4.REQUEST_ID) COLLATE DATABASE_DEFAULT
-               = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
-             AND CONVERT(VARCHAR(36), TB4.APPROVAL_TYPE_ID) COLLATE DATABASE_DEFAULT
-               = CONVERT(VARCHAR(36), :pendingApprovalTypeId) COLLATE DATABASE_DEFAULT
-             AND TB4.ENABLED = '1'
+         AND (
+           (
+             TB2.NAME COLLATE DATABASE_DEFAULT = 'Pending' COLLATE DATABASE_DEFAULT
+             AND CONVERT(VARCHAR(36), TB3.STATUS_ID) COLLATE DATABASE_DEFAULT
+               = CONVERT(VARCHAR(36), :waitingStatusId) COLLATE DATABASE_DEFAULT
+             AND TB1.APPROVAL_STEP = (
+               SELECT MIN(TB4.APPROVAL_STEP)
+               FROM APPROVALS AS TB4
+               WHERE CONVERT(VARCHAR(36), TB4.REQUEST_ID) COLLATE DATABASE_DEFAULT
+                   = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
+                 AND CONVERT(VARCHAR(36), TB4.APPROVAL_TYPE_ID) COLLATE DATABASE_DEFAULT
+                   = CONVERT(VARCHAR(36), :pendingApprovalTypeId) COLLATE DATABASE_DEFAULT
+                 AND TB4.ENABLED = '1'
+             )
+           )
+           ${finalSavePermissionClause}
          )
+         ${backwardPermissionClause}
        ORDER BY TB1.SORTING ASC`,
       {
         replacements: {
@@ -1521,6 +1597,10 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
           isSystemAdmin: isSystemAdmin ? 1 : 0,
           waitingStatusId: WAITING_APPROVAL_STATUS_ID,
           pendingApprovalTypeId: PENDING_APPROVAL_TYPE_ID,
+          ...(action === 'save' ? {
+            allowFinalSave: 1,
+            finalStatusId: FINAL_STATUS_ID,
+          } : {}),
         },
         type: QueryTypes.SELECT,
         transaction,
@@ -1593,6 +1673,60 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
       { where: { ID: pendingApproval.ID, REQUEST_ID: id, ENABLED: true }, transaction },
     );
     if (affectedRows === 0) throw validationError('The pending approval could not be updated.');
+
+    if (action === 'approve') {
+      await database.query(
+        `UPDATE APPROVALS
+         SET DESCRIPTION = :description,
+             LIMIT_AMOUNT = :limitAmount,
+             TERM_ID = :termId,
+             RATING_ID = :ratingId,
+             IS_PERMANENT = :isPermanent,
+             IS_TEMPORARY = :isTemporary,
+             VALID_FROM = :validFrom,
+             VALID_TO = :validTo,
+             IS_CLEAR_OUTSTANDING_BALANCE = :clearOutstanding,
+             IS_WITHIN_APPROVED_LIMIT = :withinLimit,
+             IS_BANK_GUARANTEE = :bankGuarantee,
+             BANK_GUARANTEE_AMOUNT = :bankGuaranteeAmount,
+             IS_CASH_DEPOSIT = :cashDeposit,
+             CASH_DEPOSIT_AMOUNT = :cashDepositAmount,
+             APPROVAL_TYPE_ID = :approvedTypeId,
+             UPDATED_BY = :updatedBy,
+             UPDATED_DATE = GETDATE()
+         WHERE CONVERT(VARCHAR(36), REQUEST_ID) COLLATE DATABASE_DEFAULT
+             = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
+           AND TRY_CONVERT(BIGINT, APPROVER_ID) = TRY_CONVERT(BIGINT, :approverId)
+           AND CONVERT(VARCHAR(36), APPROVAL_TYPE_ID) COLLATE DATABASE_DEFAULT
+             = CONVERT(VARCHAR(36), :pendingApprovalTypeId) COLLATE DATABASE_DEFAULT
+           AND ENABLED = '1'`,
+        {
+          replacements: {
+            id,
+            description: normalizedUpdate.DESCRIPTION,
+            limitAmount: normalizedUpdate.LIMIT_AMOUNT,
+            termId: normalizedUpdate.TERM_ID,
+            ratingId: normalizedUpdate.RATING_ID,
+            isPermanent: normalizedUpdate.IS_PERMANENT,
+            isTemporary: normalizedUpdate.IS_TEMPORARY,
+            validFrom: normalizedUpdate.VALID_FROM,
+            validTo: normalizedUpdate.VALID_TO,
+            clearOutstanding: normalizedUpdate.IS_CLEAR_OUTSTANDING_BALANCE,
+            withinLimit: normalizedUpdate.IS_WITHIN_APPROVED_LIMIT,
+            bankGuarantee: normalizedUpdate.IS_BANK_GUARANTEE,
+            bankGuaranteeAmount: normalizedUpdate.BANK_GUARANTEE_AMOUNT,
+            cashDeposit: normalizedUpdate.IS_CASH_DEPOSIT,
+            cashDepositAmount: normalizedUpdate.CASH_DEPOSIT_AMOUNT,
+            approvedTypeId: approvalUpdate.APPROVAL_TYPE_ID,
+            updatedBy,
+            approverId: pendingApproval.APPROVER_ID,
+            pendingApprovalTypeId: PENDING_APPROVAL_TYPE_ID,
+          },
+          type: QueryTypes.UPDATE,
+          transaction,
+        },
+      );
+    }
 
     if (action === 'reject') {
       await Request.update(
@@ -1667,9 +1801,19 @@ async function processFinalAction(id, action, payload, updatedBy, isSystemAdmin 
              WHERE CONVERT(VARCHAR(36), TB2.REQUEST_ID) COLLATE DATABASE_DEFAULT
                  = CONVERT(VARCHAR(36), TB1.ID) COLLATE DATABASE_DEFAULT
                AND TRY_CONVERT(BIGINT, TB2.APPROVER_ID) = TRY_CONVERT(BIGINT, :updatedBy)
-               AND CONVERT(VARCHAR(36), TB2.APPROVER_TYPE_ID) COLLATE DATABASE_DEFAULT
-                 = CONVERT(VARCHAR(36), :bdsReviewApproverTypeId) COLLATE DATABASE_DEFAULT
+               AND TB2.APPROVAL_STEP = 2
                AND TB2.ENABLED = '1'
+               AND EXISTS (
+                 SELECT 1
+                 FROM APPROVER_TYPES AS TB3
+                 WHERE CONVERT(VARCHAR(36), TB3.ID) COLLATE DATABASE_DEFAULT
+                     = CONVERT(VARCHAR(36), TB2.APPROVER_TYPE_ID) COLLATE DATABASE_DEFAULT
+                   AND TB3.ENABLED = '1'
+                   AND (
+                     TB3.NAME COLLATE DATABASE_DEFAULT LIKE '%BDS%' COLLATE DATABASE_DEFAULT
+                     OR TB3.NAME COLLATE DATABASE_DEFAULT LIKE '%Review%' COLLATE DATABASE_DEFAULT
+                   )
+               )
            )
          )`,
       {
@@ -1678,7 +1822,6 @@ async function processFinalAction(id, action, payload, updatedBy, isSystemAdmin 
           updatedBy,
           isSystemAdmin: isSystemAdmin ? 1 : 0,
           finalStatusId: FINAL_STATUS_ID,
-          bdsReviewApproverTypeId: BDS_REVIEW_APPROVER_TYPE_ID,
         },
         type: QueryTypes.SELECT,
         transaction,
@@ -1815,6 +1958,7 @@ module.exports = {
   updateRequestCreditSuggestion,
   updateRequestScoringAndPayment,
   updateRequestRequestedDetails,
+  saveFinalApproval,
   cloneRequestData,
   cancelRequest,
   processApprovalAction,

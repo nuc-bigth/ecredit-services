@@ -59,6 +59,8 @@ module.exports = (sequelize) =>
       IS_PERMANENT_PROPOSED: DataTypes.BOOLEAN,
       IS_TEMPORARY_PROPOSED: DataTypes.BOOLEAN,
       STATUS_ID: DataTypes.STRING,
+      SUBMITTED_BY: DataTypes.INTEGER,
+      SUBMITTED_DATE: DataTypes.DATE,
       PROPOSED_DISPLAYED_NOTES: DataTypes.TEXT,
       PROPOSED_NOTES: DataTypes.TEXT,
       REF_FINANCIAL_STATEMENT_FY: DataTypes.DATE,

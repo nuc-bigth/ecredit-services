@@ -27,7 +27,34 @@ function pendingApprovers(history) {
     const pending = currentCycleHistory(history).filter((item) => item.APPROVAL_TYPE_NAME === 'Pending');
     if (!pending.length) return [];
     const step = Math.min(...pending.map((item) => Number(item.APPROVAL_STEP) || Number(item.SORTING) || 0));
-    return pending.filter((item) => (Number(item.APPROVAL_STEP) || Number(item.SORTING) || 0) === step);
+    const currentStep = pending.filter((item) => (Number(item.APPROVAL_STEP) || Number(item.SORTING) || 0) === step);
+    const parallelKey = currentStep
+        .map((item) => typeof item.PARALLEL_KEYS === 'string' ? item.PARALLEL_KEYS.trim() : '')
+        .find(Boolean);
+    return (parallelKey
+        ? currentStep.filter((item) => String(item.PARALLEL_KEYS || '').trim() === parallelKey)
+        : currentStep)
+        .sort((left, right) => (Number(left.SORTING) || 0) - (Number(right.SORTING) || 0));
+}
+
+function isParallelApprovalIncomplete(history) {
+    const currentCycle = currentCycleHistory(history);
+    const pending = currentCycle.filter((item) => item.APPROVAL_TYPE_NAME === 'Pending');
+    if (!pending.length) return false;
+
+    const step = Math.min(...pending.map((item) => Number(item.APPROVAL_STEP) || Number(item.SORTING) || 0));
+    const currentStepPending = pending.filter((item) => (Number(item.APPROVAL_STEP) || Number(item.SORTING) || 0) === step);
+    const parallelKey = currentStepPending
+        .map((item) => typeof item.PARALLEL_KEYS === 'string' ? item.PARALLEL_KEYS.trim() : '')
+        .find(Boolean);
+    if (!parallelKey) return false;
+
+    const parallelApprovals = currentCycle.filter((item) => (
+        (Number(item.APPROVAL_STEP) || Number(item.SORTING) || 0) === step
+        && String(item.PARALLEL_KEYS || '').trim() === parallelKey
+    ));
+    return parallelApprovals.some((item) => item.APPROVAL_TYPE_NAME === 'Pending')
+        && parallelApprovals.some((item) => item.APPROVAL_TYPE_NAME === 'Approved');
 }
 
 function submitter(history) {
@@ -103,14 +130,41 @@ function buildCompletedSubject(emailModel) {
     return `Completed for your requested ${emailModel.companyName} (${emailModel.salesGroup})`;
 }
 
+function approvalActionsFor(requestId, approvers) {
+    return approvers.map((approval) => {
+        const actionLinks = ['approve', 'reject'];
+        if (approval.ALLOW_BACKWARD === true || approval.ALLOW_BACKWARD === 1 || approval.ALLOW_BACKWARD === '1') {
+            actionLinks.unshift('backward');
+        }
+        return actionLinks.map((action) => ({
+            label: action.charAt(0).toUpperCase() + action.slice(1),
+            action,
+            backgroundColor: action === 'backward' ? '#adb5bd' : action === 'approve' ? '#008000' : '#D73925',
+            textColor: action === 'backward' ? '#212529' : '#F1F1F1',
+            url: `${config.frontendBaseUrl.replace(/\/$/, '')}/email-approval/${encodeURIComponent(createEmailApprovalToken({
+                requestId,
+                approvalId: approval.ID,
+                approverId: approval.APPROVER_ID,
+                action,
+            }))}`,
+        }));
+    }).flat();
+}
+
 async function sendRequestWorkflowNotification({ event, requestId, environment, actorEmail, actorName, user, transporter }) {
     const eventConfig = EVENT_CONFIG[event];
     if (!eventConfig) throw new Error(`Unsupported workflow email event: ${event}`);
     const normalizedEnvironment = String(environment || '').trim().toLowerCase();
 
     const history = await listApprovalHistory(requestId);
+    if (event === 'approve' && isParallelApprovalIncomplete(history)) {
+        return { skipped: true, reason: 'Parallel approval is incomplete' };
+    }
     const actor = { email: actorEmail, displayName: actorName };
     const resolved = resolveRecipients(event, history, actor);
+    const approvalApprovers = event === 'submit' || event === 'approve'
+        ? pendingApprovers(history).filter((item) => String(item.APPROVER_EMAIL || '').trim())
+        : [];
     const recipients = {
         to: uniqueAddresses(resolved.toRecords),
         cc: uniqueAddresses(resolved.ccRecords),
@@ -118,27 +172,6 @@ async function sendRequestWorkflowNotification({ event, requestId, environment, 
     if (!recipients.to.length) return { skipped: true, reason: 'No recipients' };
 
     const emailModel = await getRequestEmailModel(requestId, resolved.dear);
-    if (event === 'submit' || event === 'approve') {
-        const actions = pendingApprovers(history).map((approval) => {
-            const actionLinks = ['approve', 'reject'];
-            if (approval.ALLOW_BACKWARD === true || approval.ALLOW_BACKWARD === 1 || approval.ALLOW_BACKWARD === '1') {
-                actionLinks.unshift('backward');
-            }
-            return actionLinks.map((action) => ({
-                label: action.charAt(0).toUpperCase() + action.slice(1),
-                action,
-                backgroundColor: action === 'backward' ? '#adb5bd' : action === 'approve' ? '#008000' : '#D73925',
-                textColor: action === 'backward' ? '#212529' : '#F1F1F1',
-                url: `${config.frontendBaseUrl.replace(/\/$/, '')}/email-approval/${encodeURIComponent(createEmailApprovalToken({
-                    requestId,
-                    approvalId: approval.ID,
-                    approverId: approval.APPROVER_ID,
-                    action,
-                }))}`,
-            }));
-        }).flat();
-        emailModel.approvalActions = actions;
-    }
     const subject = event === 'submit' || event === 'approve'
         ? buildApprovalSubject(emailModel)
         : event === 'final'
@@ -146,17 +179,25 @@ async function sendRequestWorkflowNotification({ event, requestId, environment, 
             : event === 'completed'
                 ? buildCompletedSubject(emailModel)
             : eventConfig.subject;
-    return sendRequestWorkflowEmail({
-        environment: normalizedEnvironment,
-        template: eventConfig.template,
-        subject,
-        emailModel,
-        recipients,
-        actorEmail,
-        transporter,
-        requestId,
-        user,
-    });
+    if (!approvalApprovers.length) {
+        return sendRequestWorkflowEmail({ environment: normalizedEnvironment, template: eventConfig.template, subject, emailModel, recipients, actorEmail, transporter, requestId, user });
+    }
+
+    return Promise.all(approvalApprovers.map(async (approver) => {
+        const approverModel = await getRequestEmailModel(requestId, approver.APPROVER_NAME || resolved.dear);
+        approverModel.approvalActions = approvalActionsFor(requestId, [approver]);
+        return sendRequestWorkflowEmail({
+            environment: normalizedEnvironment,
+            template: eventConfig.template,
+            subject: buildApprovalSubject(approverModel),
+            emailModel: approverModel,
+            recipients: { to: [String(approver.APPROVER_EMAIL || '').trim()], cc: [] },
+            actorEmail,
+            transporter,
+            requestId,
+            user,
+        });
+    }));
 }
 
 async function notifyBestEffort(options) {
@@ -174,6 +215,7 @@ async function notifyBestEffort(options) {
 
 module.exports = {
     pendingApprovers,
+    isParallelApprovalIncomplete,
     bdsReviewApprovers,
     resolveRecipients,
     buildApprovalSubject,
