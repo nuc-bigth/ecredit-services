@@ -274,11 +274,11 @@
                         <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
                             <tr>
                                 <td class="label">No.</td>
-                                <td class="value">{{requestNo}}</td>
+                                <td class="value"><a href="{{linkRequestNo}}" target="_blank" style="color: #007a3d; font-weight: bold;">{{requestNo}}</a></td>
                             </tr>
                             <tr>
                                 <td class="label">CRM No.</td>
-                                <td class="value">{{crmNo}}</td>
+                                <td class="value"><a href="{{linkCrmNo}}" target="_blank" style="color: #007a3d; font-weight: bold;">{{crmNo}}</a></td>
                             </tr>
                             <tr>
                                 <td class="label">Request Type</td>
@@ -581,7 +581,11 @@
                 </tr>
             </table>
             {{/if}}
-            <p class="button-note">Use the button above to access this request for approval.</p>
+            <p style="margin: 26px 0 4px;">You can access to this request by following 
+                <a href="{{link}}" target="_blank" style="color: #007a3d; font-weight: bold;">
+                    Link
+                </a>
+            </p>
         </td>
     </tr>
     <tr class="email-footer">

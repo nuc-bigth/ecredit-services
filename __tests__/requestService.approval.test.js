@@ -13,6 +13,8 @@ const approvalId = 'approval-2';
 const updatedBy = 12345;
 const finalStatusId = '014e8e8b-42cf-4b2f-8cae-e395e26efbcd';
 const rejectedStatusId = '94589a22-12e5-4298-aa30-06295acbe1b9';
+const completedStatusId = '407e23f9-caf5-4c4a-801d-598cf437d1ae';
+const cancelledStatusId = '31d531f4-0420-4db5-aecf-bcfe4a0e8c4a';
 
 function approvalPayload(action = 'save') {
   return {
@@ -230,6 +232,130 @@ describe('requestService.processApprovalAction', () => {
     )).rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
 
     expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it('copies the last approved values before completing a final request', async () => {
+    database.query
+      .mockResolvedValueOnce([{ ID: requestId }])
+      .mockResolvedValueOnce([{
+        LIMIT_AMOUNT: 250000,
+        TERM_ID: 'approved-term',
+        RATING_ID: 'approved-rating',
+        VALID_FROM: '2026-09-01',
+        VALID_TO: '2026-09-30',
+        DESCRIPTION: 'Final approved note',
+        IS_PERMANENT: false,
+        IS_TEMPORARY: true,
+      }]);
+
+    await requestService.processApprovalAction(
+      requestId,
+      'finalConfirm',
+      {
+        ...approvalPayload('finalConfirm'),
+        DESCRIPTION: 'Final approved note',
+        LIMIT_AMOUNT: 250000,
+        TERM_ID: 'approved-term',
+        RATING_ID: 'approved-rating',
+        VALID_FROM: '2026-09-01',
+        VALID_TO: '2026-09-30',
+        IS_PERMANENT: false,
+        IS_TEMPORARY: true,
+        IS_CLEAR_OUTSTANDING_BALANCE: true,
+        IS_WITHIN_APPROVED_LIMIT: false,
+        IS_BANK_GUARANTEE: false,
+        BANK_GUARANTEE_AMOUNT: 0,
+        IS_CASH_DEPOSIT: true,
+        CASH_DEPOSIT_AMOUNT: 1200,
+      },
+      updatedBy,
+    );
+
+    expect(requestUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        STATUS_ID: completedStatusId,
+        APPROVED_LIMIT_AMOUNT: 250000,
+        APPROVED_TERM_ID: 'approved-term',
+        APPROVED_RATING_ID: 'approved-rating',
+        APPROVED_VALID_FROM: expect.objectContaining({ fn: 'DATEFROMPARTS' }),
+        APPROVED_VALID_TO: expect.objectContaining({ fn: 'DATEFROMPARTS' }),
+        APPROVED_NOTES: 'Final approved note',
+        IS_PERMANENT_APPROVED: false,
+        IS_TEMPORARY_APPROVED: true,
+      }),
+      expect.objectContaining({ transaction }),
+    );
+    expect(transaction.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires a comment when cancelling a final request', async () => {
+    await expect(requestService.processApprovalAction(
+      requestId,
+      'finalCancel',
+      { DESCRIPTION: '   ' },
+      updatedBy,
+    )).rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
+
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid Final Confirm input before opening a transaction', async () => {
+    await expect(requestService.processApprovalAction(
+      requestId,
+      'finalConfirm',
+      { DESCRIPTION: '', IS_PERMANENT: 'invalid' },
+      updatedBy,
+    )).rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
+
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it('moves an authorized final cancellation to cancelled', async () => {
+    database.query.mockResolvedValueOnce([{ ID: requestId }]);
+
+    await requestService.processApprovalAction(
+      requestId,
+      'finalCancel',
+      { DESCRIPTION: 'Customer withdrew the request.' },
+      updatedBy,
+    );
+
+    expect(requestUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ STATUS_ID: cancelledStatusId }),
+      expect.objectContaining({ transaction }),
+    );
+    expect(transaction.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not issue a second rollback when Final processing has already closed the transaction', async () => {
+    transaction.finished = 'rollback';
+    database.query.mockResolvedValueOnce([{ ID: requestId }]);
+    database.query.mockRejectedValueOnce(new Error('Final update failed'));
+
+    await expect(requestService.processApprovalAction(
+      requestId,
+      'finalConfirm',
+      approvalPayload('finalConfirm'),
+      updatedBy,
+    )).rejects.toThrow('Final update failed');
+
+    expect(transaction.rollback).not.toHaveBeenCalled();
+  });
+
+  it('preserves the original Final database error when rollback also fails', async () => {
+    database.query.mockResolvedValueOnce([{ ID: requestId }]);
+    database.query.mockRejectedValueOnce(new Error('Final update failed'));
+    transaction.rollback.mockRejectedValueOnce(Object.assign(new Error('Rollback failed'), { code: 'EREQUEST' }));
+
+    const error = await requestService.processApprovalAction(
+      requestId,
+      'finalConfirm',
+      approvalPayload('finalConfirm'),
+      updatedBy,
+    ).catch((caughtError) => caughtError);
+
+    expect(error.message).toBe('Final update failed');
+    expect(error.rollbackError).toEqual({ message: 'Rollback failed', code: 'EREQUEST' });
   });
 });
 

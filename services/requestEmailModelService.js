@@ -1,4 +1,5 @@
 const { getModels } = require('../models');
+const config = require('../config/env');
 
 function isMissing(value) {
   return value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
@@ -36,6 +37,15 @@ function formatMoney(value) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return '-';
   return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function buildRequestLink(requestId) {
+  return `${config.frontendBaseUrl.replace(/\/$/, '')}/all-requests/${encodeURIComponent(requestId)}?tab=approver`;
+}
+
+function buildSalesforceLink(crmId) {
+  if (isMissing(crmId)) return '';
+  return `${config.salesforceBaseUrl.replace(/\/$/, '')}/${encodeURIComponent(String(crmId).trim())}`;
 }
 
 function isCurrentCycle(value) {
@@ -154,12 +164,18 @@ function mapRequestToEmailModel(request, dear = '-', approvalHistory = []) {
   const creditDetailsMovements = mapCreditDetailsMovements(approvalHistory);
   const currentCycleApprovals = creditDetailsMovements.filter((movement) => movement.currentCycle && movement.sorting > 2);
   const suggestedCreditDetails = currentCycleApprovals[currentCycleApprovals.length - 1] || creditDetailsMovements[creditDetailsMovements.length - 1] || null;
+  const approvedCreditMovement = currentCycleApprovals
+    .filter((movement) => movement.approvalStatus === 'Approved')
+    .sort((left, right) => right.sorting - left.sorting)[0] || null;
   const currentStep = selectCurrentStep(creditDetailsMovements);
   const lastActionedStep = selectLastActionedStep(creditDetailsMovements, currentStep);
 
   return {
     dear: valueOrDash(dear),
+    link: buildRequestLink(request.ID),
+    linkRequestNo: buildRequestLink(request.ID),
     requestNo: valueOrDash(request.NO),
+    linkCrmNo: buildSalesforceLink(request.CRM_ID),
     crmNo: valueOrDash(request.CRM_NO),
     requestType: valueOrDash(request.REQUESTED_CUSTOMER_TYPE),
     companyName: valueOrDash(request.CUSTOMER_NAME_ENG),
@@ -198,9 +214,34 @@ function mapRequestToEmailModel(request, dear = '-', approvalHistory = []) {
     creditTermExisting: valueOrDash(request.existingTerm?.NAME),
     creditTermRequested: valueOrDash(request.requestedTerm?.NAME),
     creditTermProposed: valueOrDash(request.proposedTerm?.NAME),
+    creditTermApproved: valueOrDash(request.approvedTerm?.NAME),
     creditLimitExisting: formatMoney(request.EXISTING_LIMIT_AMOUNT),
     creditLimitRequested: formatMoney(request.REQUESTED_LIMIT_AMOUNT),
     creditLimitProposed: formatMoney(request.PROPOSED_LIMIT_AMOUNT),
+    creditLimitApproved: formatMoney(request.APPROVED_LIMIT_AMOUNT),
+    creditRatingApproved: valueOrDash(request.approvedRating?.NAME),
+    approvedOpinion: valueOrDash(request.APPROVED_NOTES),
+    approvedCreditDetails: {
+      creditTerm: valueOrDash(request.approvedTerm?.NAME),
+      creditLimit: formatMoney(request.APPROVED_LIMIT_AMOUNT),
+      creditRating: valueOrDash(request.approvedRating?.NAME),
+      temporaryYes: isEnabled(request.IS_TEMPORARY_APPROVED),
+      permanentYes: isEnabled(request.IS_PERMANENT_APPROVED),
+      validFrom: formatDate(request.APPROVED_VALID_FROM),
+      validTo: formatDate(request.APPROVED_VALID_TO),
+      clearOutstandingBalanceYes: approvedCreditMovement?.clearOutstandingBalanceYes || false,
+      withinApprovedLimitYes: approvedCreditMovement?.withinApprovedLimitYes || false,
+      bankGuarantee: approvedCreditMovement?.bankGuarantee === 'Yes',
+      bankGuaranteeAmount: approvedCreditMovement?.bankGuaranteeAmount || '-',
+      cashDeposit: approvedCreditMovement?.cashDeposit === 'Yes',
+      cashDepositAmount: approvedCreditMovement?.cashDepositAmount || '-',
+      showAdditionalConditions: Boolean(
+        approvedCreditMovement?.clearOutstandingBalanceYes
+        || approvedCreditMovement?.withinApprovedLimitYes
+        || approvedCreditMovement?.bankGuarantee === 'Yes'
+        || approvedCreditMovement?.cashDeposit === 'Yes'
+      ),
+    },
     creditDetailsMovements,
     creditDetailsSummary: mapCreditDetailsSummary(creditDetailsMovements, currentStep, lastActionedStep),
     suggestedCreditDetails: suggestedCreditDetails ? {
@@ -239,6 +280,8 @@ async function getRequestEmailModel(requestId, dear = '-') {
       { model: Term, as: 'existingTerm', attributes: ['ID', 'NAME'] },
       { model: Term, as: 'requestedTerm', attributes: ['ID', 'NAME'] },
       { model: Term, as: 'proposedTerm', attributes: ['ID', 'NAME'] },
+      { model: Rating, as: 'approvedRating', attributes: ['ID', 'NAME'] },
+      { model: Term, as: 'approvedTerm', attributes: ['ID', 'NAME'] },
     ],
   });
 
@@ -250,6 +293,8 @@ async function getRequestEmailModel(requestId, dear = '-') {
 module.exports = {
   formatDate,
   formatMoney,
+  buildRequestLink,
+  buildSalesforceLink,
   isCurrentCycle,
   mapCreditDetailsMovements,
   mapCreditDetailsSummary,

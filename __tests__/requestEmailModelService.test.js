@@ -4,18 +4,33 @@ jest.mock('../models', () => ({ getModels: jest.fn() }));
 jest.mock('../services/requestService', () => ({
   listApprovalHistory: jest.fn().mockResolvedValue([]),
 }));
+jest.mock('../config/env', () => ({
+  frontendBaseUrl: 'https://ecredit-qas.bigth.com/',
+  salesforceBaseUrl: 'https://bigcrm.my.salesforce.com/',
+}));
 
 const { getModels } = require('../models');
 const { listApprovalHistory } = require('../services/requestService');
 const {
   formatDate,
   formatMoney,
+  buildRequestLink,
+  buildSalesforceLink,
   mapRequestToEmailModel,
   mapCreditDetailsMovements,
   getRequestEmailModel,
 } = require('../services/requestEmailModelService');
 
 describe('requestEmailModelService', () => {
+  test('builds the request link from the environment base URL and request ID', () => {
+    expect(buildRequestLink('request-1')).toBe('https://ecredit-qas.bigth.com/all-requests/request-1?tab=approver');
+  });
+
+  test('builds the Salesforce link from the environment base URL and CRM ID', () => {
+    expect(buildSalesforceLink('15f13395-a4c3-4c66-abba-1551d20d56ea'))
+      .toBe('https://bigcrm.my.salesforce.com/15f13395-a4c3-4c66-abba-1551d20d56ea');
+  });
+
   test('formats dates and money for email output', () => {
     expect(formatDate('2026-09-22T00:00:00.000Z')).toBe('22/09/2026');
     expect(formatMoney('20000')).toBe('20,000.00');
@@ -24,6 +39,9 @@ describe('requestEmailModelService', () => {
 
   test('maps the external customer type and request credit fields', () => {
     const model = mapRequestToEmailModel({
+      ID: 'request-1',
+      CRM_ID: '15f13395-a4c3-4c66-abba-1551d20d56ea',
+      CRM_NO: 'CRM-0001',
       REQUESTED_CUSTOMER_TYPE: 'New',
       CUSTOMER_NAME_ENG: 'Acme',
       SOLD_TO: '100001',
@@ -61,9 +79,12 @@ describe('requestEmailModelService', () => {
 
     expect(model).toEqual(expect.objectContaining({
       dear: 'Approver',
+      link: 'https://ecredit-qas.bigth.com/all-requests/request-1?tab=approver',
+      linkRequestNo: 'https://ecredit-qas.bigth.com/all-requests/request-1?tab=approver',
+      linkCrmNo: 'https://bigcrm.my.salesforce.com/15f13395-a4c3-4c66-abba-1551d20d56ea',
       salesGroup: '200 - MG',
       requestNo: '-',
-      crmNo: '-',
+      crmNo: 'CRM-0001',
       customerType: 'External',
       registeredCapital: '20,000.00',
       creditRatingScore: 'A',

@@ -2,8 +2,10 @@
 
 const {
   pendingApprovers,
+  bdsReviewApprovers,
   resolveRecipients,
   buildApprovalSubject,
+  buildCompletedSubject,
 } = require('../services/requestWorkflowNotificationService');
 
 function approval(overrides = {}) {
@@ -26,6 +28,13 @@ describe('request workflow notification recipients', () => {
     })).toBe('New Submitting for your approval Benchmark Electronics (Thailand)PCL. (200 - MG)');
   });
 
+  it('builds the completed subject from customer and sales group', () => {
+    expect(buildCompletedSubject({
+      companyName: 'Pentel Co., Ltd.',
+      salesGroup: '100 - TGEE',
+    })).toBe('Completed for your requested Pentel Co., Ltd. (100 - TGEE)');
+  });
+
   it('groups all pending approvers from the first pending step', () => {
     const history = [
       approval(),
@@ -37,6 +46,38 @@ describe('request workflow notification recipients', () => {
     expect(resolveRecipients('submit', history, {}).toRecords).toEqual([
       { email: 'first@example.com', name: 'FIRST-APPROVER' },
       { email: 'second@example.com', name: 'SECOND-APPROVER' },
+    ]);
+  });
+
+  it('selects only current-cycle BDS Review approvers from step 2', () => {
+    const history = [
+      approval({
+        APPROVAL_STEP: 2,
+        APPROVER_TYPE_NAME: 'Manager Approve (BDS)',
+        APPROVER_NAME: 'BDS-APPROVER',
+        APPROVER_EMAIL: 'bds@example.com',
+        APPROVAL_TYPE_NAME: 'Approved',
+      }),
+      approval({
+        APPROVAL_STEP: 2,
+        APPROVER_TYPE_NAME: 'Manager Approve (Finance)',
+        APPROVER_NAME: 'FINANCE-APPROVER',
+        APPROVER_EMAIL: 'finance@example.com',
+        APPROVAL_TYPE_NAME: 'Approved',
+      }),
+      approval({
+        APPROVAL_STEP: 2,
+        APPROVER_TYPE_NAME: 'Manager Approve (BDS)',
+        APPROVER_NAME: 'OLD-BDS-APPROVER',
+        APPROVER_EMAIL: 'old-bds@example.com',
+        APPROVAL_TYPE_NAME: 'Approved',
+        CURRENT_CYCLE: false,
+      }),
+    ];
+
+    expect(bdsReviewApprovers(history)).toEqual([history[0]]);
+    expect(resolveRecipients('final', history, {}).toRecords).toEqual([
+      { email: 'bds@example.com', name: 'BDS-APPROVER' },
     ]);
   });
 
@@ -61,7 +102,7 @@ describe('request workflow notification recipients', () => {
         { email: 'prior@example.com', name: 'PRIOR' },
       ],
       ccRecords: [{ email: 'actor@example.com', name: 'ACTOR' }],
-      dear: 'All',
+      dear: 'ACTOR',
     });
   });
 });

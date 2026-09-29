@@ -41,6 +41,7 @@ const envSchema = Joi.object()
     // Application URLs
     APP_BASE_URL: Joi.string().uri().required(),
     FRONTEND_BASE_URL: Joi.string().uri().required(),
+    SALESFORCE_BASE_URL: Joi.string().uri().required(),
     CORS_ALLOWED_ORIGINS: Joi.string().required(),
     
     // Logging Configuration
@@ -164,6 +165,7 @@ module.exports = {
   port: parseInt(config.PORT, 10),
   appBaseUrl: config.APP_BASE_URL,
   frontendBaseUrl: config.FRONTEND_BASE_URL,
+  salesforceBaseUrl: config.SALESFORCE_BASE_URL,
   corsAllowedOrigins: parseCorsOrigins(config.CORS_ALLOWED_ORIGINS),
   
   // Database

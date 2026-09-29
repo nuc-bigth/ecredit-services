@@ -109,6 +109,7 @@ async function confirmEmailApprovalAction(token, comment) {
   const normalizedComment = normalizeComment(comment, payload.action);
   const database = getDatabase();
   const transaction = await database.transaction();
+  let isFinalApproval = false;
   try {
     const approval = await findPendingApproval(payload, transaction);
     const [affectedRows] = await database.query(
@@ -163,6 +164,7 @@ async function confirmEmailApprovalAction(token, comment) {
         { replacements: { requestId: payload.requestId, pendingTypeId: PENDING_APPROVAL_TYPE_ID }, type: QueryTypes.SELECT, transaction },
       );
       if (Number(pendingRows[0]?.TOTAL) === 0) {
+        isFinalApproval = true;
         await database.query(
           `UPDATE REQUESTS SET STATUS_ID = :finalStatusId, UPDATED_BY = :updatedBy, UPDATED_DATE = GETDATE()
            WHERE ID = :requestId AND ENABLED = '1'`,
@@ -174,6 +176,7 @@ async function confirmEmailApprovalAction(token, comment) {
     return {
       requestId: String(payload.requestId),
       action: payload.action,
+      isFinalApproval,
       approverEmail: approval.APPROVER_EMAIL || '',
       approverName: approval.APPROVER_NAME || '',
     };

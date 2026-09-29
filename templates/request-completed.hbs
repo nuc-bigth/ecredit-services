@@ -275,11 +275,11 @@
                         <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
                             <tr>
                                 <td class="label">No.</td>
-                                <td class="value">{{requestNo}}</td>
+                                <td class="value"><a href="{{linkRequestNo}}" target="_blank" style="color: #007a3d; font-weight: bold;">{{requestNo}}</a></td>
                             </tr>
                             <tr>
                                 <td class="label">CRM No.</td>
-                                <td class="value">{{crmNo}}</td>
+                                <td class="value"><a href="{{linkCrmNo}}" target="_blank" style="color: #007a3d; font-weight: bold;">{{crmNo}}</a></td>
                             </tr>
                             <tr>
                                 <td class="label">Request Type</td>
@@ -336,19 +336,19 @@
                                 <td>Credit Term</td>
                                 <td>{{creditTermExisting}}</td>
                                 <td>{{creditTermProposed}}</td>
-                                <td>{{suggestedCreditDetails.creditTerm}}</td>
+                                <td>{{approvedCreditDetails.creditTerm}}</td>
                             </tr>
                             <tr>
                                 <td>Credit Limit (THB)</td>
                                 <td>{{creditLimitExisting}}</td>
                                 <td>{{creditLimitProposed}}</td>
-                                <td>{{suggestedCreditDetails.creditLimit}}</td>
+                                <td>{{approvedCreditDetails.creditLimit}}</td>
                             </tr>
                             <tr>
                                 <td>Credit Rating</td>
                                 <td>{{creditRatingExisting}}</td>
                                 <td>-</td>
-                                <td>{{suggestedCreditDetails.creditRating}}</td>
+                                <td>{{approvedCreditDetails.creditRating}}</td>
                             </tr>
                         </table>
 
@@ -434,32 +434,40 @@
                         <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
                             <tr>
                                 <td class="label">Temporary Adjustment</td>
-                                <td class="value">{{#if suggestedCreditDetails.temporaryYes}}{{suggestedCreditDetails.validFrom}} - {{suggestedCreditDetails.validTo}}{{else}}-{{/if}}</td>
+                                <td class="value">{{#if
+                                    approvedCreditDetails.temporaryYes}}{{approvedCreditDetails.validFrom}} -
+                                    {{approvedCreditDetails.validTo}}{{else}}-{{/if}}</td>
                             </tr>
                             <tr>
                                 <td class="label">Permanent Adjustment</td>
-                                <td class="value">{{#if suggestedCreditDetails.permanentYes}}{{suggestedCreditDetails.validFrom}}{{else}}-{{/if}}</td>
+                                <td class="value">{{#if
+                                    approvedCreditDetails.permanentYes}}{{approvedCreditDetails.validFrom}}{{else}}-{{/if}}
+                                </td>
                             </tr>
                         </table>
 
-                        {{#if showAdditionalConditions}}
+                        {{#if approvedCreditDetails.showAdditionalConditions}}
                         <p class="section-title">Additional Conditions (Credit Team)</p>
                         <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
                             <tr>
                                 <td class="label">Clear outstanding balance</td>
-                                <td class="value">{{#if clearOutstandingBalance}}<span class="status-yes">&#10003;</span>{{else}}<span class="status-no">&#10007;</span>{{/if}}</td>
+                                <td class="value">{{#if approvedCreditDetails.clearOutstandingBalanceYes}}<span
+                                        class="status-yes">&#10003;</span>{{else}}<span
+                                        class="status-no">&#10007;</span>{{/if}}</td>
                             </tr>
                             <tr>
                                 <td class="label">Limit credit used to not exceed approved</td>
-                                <td class="value">{{#if withinApprovedLimit}}<span class="status-yes">&#10003;</span>{{else}}<span class="status-no">&#10007;</span>{{/if}}</td>
+                                <td class="value">{{#if approvedCreditDetails.withinApprovedLimitYes}}<span
+                                        class="status-yes">&#10003;</span>{{else}}<span
+                                        class="status-no">&#10007;</span>{{/if}}</td>
                             </tr>
                             <tr>
                                 <td class="label">Bank guarantee</td>
-                                <td class="value">{{amountBank}}</td>
+                                <td class="value">{{approvedCreditDetails.bankGuaranteeAmount}}</td>
                             </tr>
                             <tr>
                                 <td class="label">Cash deposit</td>
-                                <td class="value">{{amountDeposit}}</td>
+                                <td class="value">{{approvedCreditDetails.cashDepositAmount}}</td>
                             </tr>
                         </table>
                         {{/if}}
@@ -468,7 +476,7 @@
                         <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
                             <tr>
                                 <td class="label">Comment</td>
-                                <td class="value">{{{opinion}}}</td>
+                                <td class="value">{{{approvedOpinion}}}</td>
                             </tr>
                         </table>
 
@@ -549,9 +557,11 @@
                         lastActionedStep.permanentYes}}{{lastActionedStep.validFrom}}{{else}}-{{/if}}</td>
                 </tr>
             </table>
-            <p style="margin: 26px 0 4px;"><a href="{{link}}" target="_blank"
-                    style="color: #007a3d; font-weight: bold;">Open e-Credit System</a></p>
-            <p class="button-note">Use the button above to access this request for approval.</p>
+            <p style="margin: 26px 0 4px;">You can access to this request by following 
+                <a href="{{link}}" target="_blank" style="color: #007a3d; font-weight: bold;">
+                    Link
+                </a>
+            </p>
         </td>
     </tr>
     <tr class="email-footer">
@@ -562,7 +572,8 @@
         <td>
             <strong>Show for testing only.</strong><br>
             <strong>Subject:</strong> {{emailDebugInfo.subject}}<br>
-            <strong>To:</strong> {{#each emailDebugInfo.to}}{{#unless @first}}, {{/unless}}{{this}}{{else}}-{{/each}}<br>
+            <strong>To:</strong> {{#each emailDebugInfo.to}}{{#unless @first}},
+            {{/unless}}{{this}}{{else}}-{{/each}}<br>
             <strong>CC:</strong> {{#each emailDebugInfo.cc}}{{#unless @first}}, {{/unless}}{{this}}{{else}}-{{/each}}
         </td>
     </tr>

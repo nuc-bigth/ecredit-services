@@ -7,7 +7,10 @@ const { createEmailLog, updateEmailLog } = require('./emailLogService');
 const SUPPORTED_ENVIRONMENTS = new Set(['dev', 'qas', 'prd']);
 const MODEL_KEYS = [
   'dear',
+  'link',
+  'linkRequestNo',
   'requestNo',
+  'linkCrmNo',
   'crmNo',
   'requestType',
   'companyName',
@@ -102,11 +105,13 @@ function subjectPrefix(environment) {
   }[environment];
 }
 
-function resolveRecipients(environment, recipients = {}, actorEmail) {
+function resolveRecipients(environment, recipients = {}, actorEmail, fallbackEmail) {
   if (environment === 'dev' || environment === 'qas') {
-    const actor = normalizeEmailList(actorEmail, 'actorEmail');
-    if (actor.length !== 1) throw new Error(`actorEmail is required for ${environment.toUpperCase()} email.`);
-    return { to: actor, cc: [] };
+    const recipientSource = actorEmail || fallbackEmail;
+    const recipientField = actorEmail ? 'actorEmail' : 'bcc';
+    const recipientsForEnvironment = normalizeEmailList(recipientSource, recipientField);
+    if (!recipientsForEnvironment.length) throw new Error(`actorEmail or EMAIL_BCC is required for ${environment.toUpperCase()} email.`);
+    return { to: recipientsForEnvironment, cc: [] };
   }
 
   const to = normalizeEmailList(recipients.to, 'to');
@@ -131,7 +136,7 @@ function createEmailService({ environment = config.environment, bcc = config.ema
     if (missingValue(subject)) throw new Error('subject is required.');
 
     const resolvedTemplate = resolveTemplate(template);
-    const resolvedRecipients = effectiveRecipients || resolveRecipients(normalizedEnvironment, recipients, actorEmail);
+    const resolvedRecipients = effectiveRecipients || resolveRecipients(normalizedEnvironment, recipients, actorEmail, bcc);
     const bccRecipients = effectiveBcc || normalizeEmailList(bcc, 'bcc');
     if (!bccRecipients.length) throw new Error('EMAIL_BCC is required.');
 

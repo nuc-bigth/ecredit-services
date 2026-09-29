@@ -122,12 +122,18 @@ describe('emailService', () => {
     }));
   });
 
-  test('rejects a missing DEV/QAS actor email', async () => {
-    await expect(createEmailService({ environment: 'qas', transporter: createTransporter() }).sendEmail({
+  test('uses EMAIL_BCC when DEV/QAS has no session email', async () => {
+    const transporter = createTransporter();
+    await createEmailService({ environment: 'qas', transporter }).sendEmail({
       template: 'request-completed.hbs',
       subject: 'Subject',
       model,
-    })).rejects.toThrow('actorEmail is required');
+    });
+
+    expect(transporter.sendMail).toHaveBeenCalledWith(expect.objectContaining({
+      to: ['audit@example.com'],
+      cc: [],
+    }));
   });
 
   test('rejects a template outside the allowed .hbs filename format', async () => {

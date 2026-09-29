@@ -12,6 +12,7 @@ const WAITING_APPROVAL_STATUS_ID = '4ba2cdc6-47aa-41bd-99a0-79e1e6b0831b';
 const FINAL_STATUS_ID = '014e8e8b-42cf-4b2f-8cae-e395e26efbcd';
 const REJECTED_STATUS_ID = '94589a22-12e5-4298-aa30-06295acbe1b9';
 const PENDING_APPROVAL_TYPE_ID = 'b4c27a6c-ab7c-4ce5-b885-997f9104c23d';
+const BDS_REVIEW_APPROVER_TYPE_ID = 'fca8c4fa-51e8-4c7d-95ac-274d62ba5d7f';
 const SMALL_CUSTOMER_SIZE_ID = 'd8ce72cf-0228-4293-9699-311eeecb926d';
 const MEDIUM_CUSTOMER_SIZE_ID = '9d9d84c7-8926-4629-b06f-2cb4d434fc33';
 const LARGE_CUSTOMER_SIZE_ID = '4b2d23db-96d6-4cef-b6ae-10a97a8ce1cb';
@@ -339,6 +340,11 @@ function mapRequest(request) {
     APPROVED_RATING: approvedRating,
     APPROVED_LIMIT: approvedLimit,
     APPROVED_TERM: approvedTerm,
+    APPROVED_VALID_FROM: formatDate(request.APPROVED_VALID_FROM),
+    APPROVED_VALID_TO: formatDate(request.APPROVED_VALID_TO),
+    APPROVED_NOTES: request.APPROVED_NOTES || '',
+    IS_PERMANENT_APPROVED: Boolean(request.IS_PERMANENT_APPROVED),
+    IS_TEMPORARY_APPROVED: Boolean(request.IS_TEMPORARY_APPROVED),
     STATUS_ID: request.STATUS_ID || '',
     STATUS: request.status?.NAME || '',
     REQUESTED_NAME: employeeName(request.requestedByEmployee),
@@ -846,7 +852,7 @@ async function submitRequest(id, command, updatedBy) {
     await transaction.commit();
     return getRequestById(id);
   } catch (error) {
-    await transaction.rollback();
+    if (!transaction.finished) await transaction.rollback();
     throw error;
   }
 }
@@ -1450,6 +1456,9 @@ function normalizeApprovalUpdate(payload) {
 }
 
 async function processApprovalAction(id, action, payload, updatedBy, isSystemAdmin = false) {
+  if (action === 'finalConfirm' || action === 'finalCancel') {
+    return processFinalAction(id, action, payload, updatedBy, isSystemAdmin);
+  }
   if (!['save', 'approve', 'reject', 'backward'].includes(action)) {
     throw validationError('Unsupported approval action.');
   }
@@ -1461,6 +1470,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
   const { Approval, Request } = getModels();
   const database = getDatabase();
   const transaction = await database.transaction();
+  let isFinalApproval = false;
   try {
     const backwardPermissionClause = action === 'backward'
       ? `AND EXISTS (
@@ -1609,6 +1619,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
         },
       );
       if (Number(pendingCount?.TOTAL) === 0) {
+        isFinalApproval = true;
         await Request.update(
           {
             STATUS_ID: FINAL_STATUS_ID,
@@ -1621,11 +1632,176 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
     }
 
     await transaction.commit();
-    return getRequestById(id);
+    const request = await getRequestById(id);
+    if (request && typeof request === 'object') request.isFinalApproval = isFinalApproval;
+    return request;
   } catch (error) {
-    await transaction.rollback();
+    if (!transaction.finished) await transaction.rollback();
     throw error;
   }
+}
+
+async function processFinalAction(id, action, payload, updatedBy, isSystemAdmin = false) {
+  const comment = typeof payload?.DESCRIPTION === 'string' ? payload.DESCRIPTION.trim() : '';
+  if (action === 'finalCancel' && !comment) {
+    throw validationError('Comment is required when cancelling a final request.');
+  }
+
+  const normalizedUpdate = action === 'finalConfirm' ? normalizeApprovalUpdate(payload) : null;
+  const { Request } = getModels();
+  const database = getDatabase();
+  const transaction = await database.transaction();
+  try {
+    const permissionRows = await database.query(
+      `SELECT TOP 1 TB1.ID
+       FROM REQUESTS AS TB1
+       WHERE CONVERT(VARCHAR(36), TB1.ID) COLLATE DATABASE_DEFAULT = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
+         AND TB1.ENABLED = '1'
+         AND CONVERT(VARCHAR(36), TB1.STATUS_ID) COLLATE DATABASE_DEFAULT
+           = CONVERT(VARCHAR(36), :finalStatusId) COLLATE DATABASE_DEFAULT
+         AND (
+           :isSystemAdmin = 1
+           OR EXISTS (
+             SELECT 1
+             FROM APPROVALS AS TB2
+             WHERE CONVERT(VARCHAR(36), TB2.REQUEST_ID) COLLATE DATABASE_DEFAULT
+                 = CONVERT(VARCHAR(36), TB1.ID) COLLATE DATABASE_DEFAULT
+               AND TRY_CONVERT(BIGINT, TB2.APPROVER_ID) = TRY_CONVERT(BIGINT, :updatedBy)
+               AND CONVERT(VARCHAR(36), TB2.APPROVER_TYPE_ID) COLLATE DATABASE_DEFAULT
+                 = CONVERT(VARCHAR(36), :bdsReviewApproverTypeId) COLLATE DATABASE_DEFAULT
+               AND TB2.ENABLED = '1'
+           )
+         )`,
+      {
+        replacements: {
+          id,
+          updatedBy,
+          isSystemAdmin: isSystemAdmin ? 1 : 0,
+          finalStatusId: FINAL_STATUS_ID,
+          bdsReviewApproverTypeId: BDS_REVIEW_APPROVER_TYPE_ID,
+        },
+        type: QueryTypes.SELECT,
+        transaction,
+      },
+    );
+    if (!permissionRows[0]) {
+      const error = new Error('Only a BDS Review approver or System Admin can complete this request.');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    const update = {
+      STATUS_ID: action === 'finalConfirm' ? COMPLETED_STATUS_ID : CANCELLED_STATUS_ID,
+      UPDATED_BY: updatedBy,
+      UPDATED_DATE: Request.sequelize.fn('GETDATE'),
+    };
+
+    if (action === 'finalConfirm') {
+      const approvedRows = await database.query(
+          `SELECT TOP 1
+            ID, LIMIT_AMOUNT, TERM_ID, RATING_ID, VALID_FROM, VALID_TO,
+            DESCRIPTION, IS_PERMANENT, IS_TEMPORARY,
+            IS_CLEAR_OUTSTANDING_BALANCE, IS_WITHIN_APPROVED_LIMIT,
+            IS_BANK_GUARANTEE, BANK_GUARANTEE_AMOUNT,
+            IS_CASH_DEPOSIT, CASH_DEPOSIT_AMOUNT
+         FROM APPROVALS
+         WHERE CONVERT(VARCHAR(36), REQUEST_ID) COLLATE DATABASE_DEFAULT
+             = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
+           AND CONVERT(VARCHAR(36), APPROVAL_TYPE_ID) COLLATE DATABASE_DEFAULT
+             = CONVERT(VARCHAR(36), :approvedTypeId) COLLATE DATABASE_DEFAULT
+           AND ENABLED = '1'
+         ORDER BY UPDATED_DATE DESC, SORTING DESC`,
+        {
+          replacements: {
+            id,
+            approvedTypeId: 'aab5ce03-1c54-48c8-8305-6b1a017b43fd',
+          },
+          type: QueryTypes.SELECT,
+          transaction,
+        },
+      );
+      const approved = approvedRows[0];
+      if (!approved) throw validationError('No approved result is available for this request.');
+
+      await database.query(
+        `UPDATE APPROVALS
+         SET DESCRIPTION = :description,
+             LIMIT_AMOUNT = :limitAmount,
+             TERM_ID = :termId,
+             RATING_ID = :ratingId,
+             IS_PERMANENT = :isPermanent,
+             IS_TEMPORARY = :isTemporary,
+             VALID_FROM = :validFrom,
+             VALID_TO = :validTo,
+             IS_CLEAR_OUTSTANDING_BALANCE = :clearOutstanding,
+             IS_WITHIN_APPROVED_LIMIT = :withinLimit,
+             IS_BANK_GUARANTEE = :bankGuarantee,
+             BANK_GUARANTEE_AMOUNT = :bankGuaranteeAmount,
+             IS_CASH_DEPOSIT = :cashDeposit,
+             CASH_DEPOSIT_AMOUNT = :cashDepositAmount,
+             UPDATED_BY = :updatedBy,
+             UPDATED_DATE = GETDATE()
+         WHERE ID = :approvalId AND ENABLED = '1'`,
+        {
+          replacements: {
+            approvalId: approved.ID,
+            description: normalizedUpdate.DESCRIPTION,
+            limitAmount: normalizedUpdate.LIMIT_AMOUNT,
+            termId: normalizedUpdate.TERM_ID,
+            ratingId: normalizedUpdate.RATING_ID,
+            isPermanent: normalizedUpdate.IS_PERMANENT,
+            isTemporary: normalizedUpdate.IS_TEMPORARY,
+            validFrom: normalizedUpdate.VALID_FROM,
+            validTo: normalizedUpdate.VALID_TO,
+            clearOutstanding: normalizedUpdate.IS_CLEAR_OUTSTANDING_BALANCE,
+            withinLimit: normalizedUpdate.IS_WITHIN_APPROVED_LIMIT,
+            bankGuarantee: normalizedUpdate.IS_BANK_GUARANTEE,
+            bankGuaranteeAmount: normalizedUpdate.BANK_GUARANTEE_AMOUNT,
+            cashDeposit: normalizedUpdate.IS_CASH_DEPOSIT,
+            cashDepositAmount: normalizedUpdate.CASH_DEPOSIT_AMOUNT,
+            updatedBy,
+          },
+          type: QueryTypes.UPDATE,
+          transaction,
+        },
+      );
+
+      Object.assign(update, {
+        APPROVED_LIMIT_AMOUNT: normalizedUpdate.LIMIT_AMOUNT,
+        APPROVED_TERM_ID: normalizedUpdate.TERM_ID,
+        APPROVED_RATING_ID: normalizedUpdate.RATING_ID,
+        APPROVED_VALID_FROM: normalizedUpdate.VALID_FROM
+          ? databaseDateFromYmd(Request.sequelize, normalizedUpdate.VALID_FROM)
+          : null,
+        APPROVED_VALID_TO: normalizedUpdate.VALID_TO
+          ? databaseDateFromYmd(Request.sequelize, normalizedUpdate.VALID_TO)
+          : null,
+        APPROVED_NOTES: normalizedUpdate.DESCRIPTION,
+        IS_PERMANENT_APPROVED: normalizedUpdate.IS_PERMANENT,
+        IS_TEMPORARY_APPROVED: normalizedUpdate.IS_TEMPORARY,
+      });
+    } else {
+      Object.assign(update, { APPROVED_NOTES: comment });
+    }
+
+    await Request.update(update, { where: { ID: id, ENABLED: true }, transaction });
+    await transaction.commit();
+  } catch (error) {
+    if (!transaction.finished) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        error.rollbackError = {
+          message: rollbackError.message,
+          code: rollbackError.code,
+        };
+      }
+    }
+    throw error;
+  }
+
+  return getRequestById(id);
 }
 
 module.exports = {

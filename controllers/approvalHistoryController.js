@@ -1,6 +1,8 @@
 const requestService = require('../services/requestService');
 const { notifyBestEffort } = require('../services/requestWorkflowNotificationService');
 
+const FINAL_STATUS_ID = '014e8e8b-42cf-4b2f-8cae-e395e26efbcd';
+
 async function listApprovalHistory(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
@@ -73,9 +75,21 @@ async function processApprovalAction(req, res, next) {
       updatedBy,
       isSystemAdmin,
     );
+    const reachedFinalStatus = String(request?.STATUS_ID || '') === FINAL_STATUS_ID;
     if (['approve', 'reject'].includes(req.body?.action)) {
       await notifyBestEffort({
-        event: req.body.action,
+        event: req.body.action === 'approve' && (request.isFinalApproval || reachedFinalStatus)
+          ? 'final'
+          : req.body.action,
+        requestId: req.params.id,
+        environment: process.env.NODE_ENV,
+        actorEmail: req.user?.email,
+        actorName: req.user?.displayName,
+        user: req.user,
+      });
+    } else if (req.body?.action === 'finalConfirm' || req.body?.action === 'finalCancel') {
+      await notifyBestEffort({
+        event: req.body.action === 'finalConfirm' ? 'completed' : 'final-cancel',
         requestId: req.params.id,
         environment: process.env.NODE_ENV,
         actorEmail: req.user?.email,

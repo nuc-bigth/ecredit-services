@@ -15,7 +15,7 @@ async function confirmAction(req, res, next) {
   try {
     const data = await emailApprovalActionService.confirmEmailApprovalAction(req.params.token, req.body?.comment);
     const notification = await notifyBestEffort({
-      event: data.action,
+      event: data.action === 'approve' && data.isFinalApproval ? 'final' : data.action,
       requestId: data.requestId,
       environment: process.env.NODE_ENV,
       actorEmail: req.user?.email || config.email.bcc,
