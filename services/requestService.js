@@ -505,6 +505,7 @@ async function listApprovalHistory(requestId) {
         CONCAT(TB2.INITIALS, '-', TB2.USERNAME) COLLATE DATABASE_DEFAULT AS APPROVER_NAME,
         TB2.CURRENT_EMAIL COLLATE DATABASE_DEFAULT AS APPROVER_EMAIL,
         FORMAT(TB1.CREATED_DATE, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS LAST_UPDATE_DATE,
+        TB1.CREATED_DATE AS UPDATED_AT,
         CONCAT(TB3.INITIALS, '-', TB3.USERNAME) COLLATE DATABASE_DEFAULT AS LAST_UPDATE_BY,
         (CASE WHEN TB1.IS_PERMANENT_REQUESTED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS PERMANENT,
         (CASE WHEN TB1.IS_TEMPORARY_REQUESTED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS TEMPORARY,
@@ -543,6 +544,7 @@ async function listApprovalHistory(requestId) {
         CONCAT(TB2.INITIALS, '-', TB2.USERNAME) COLLATE DATABASE_DEFAULT AS APPROVER_NAME,
         TB2.CURRENT_EMAIL COLLATE DATABASE_DEFAULT AS APPROVER_EMAIL,
         FORMAT(TB1.SUBMITTED_DATE, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS LAST_UPDATE_DATE,
+        TB1.SUBMITTED_DATE AS UPDATED_AT,
         CONCAT(TB3.INITIALS, '-', TB3.USERNAME) COLLATE DATABASE_DEFAULT AS LAST_UPDATE_BY,
         (CASE WHEN TB1.IS_PERMANENT_PROPOSED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS PERMANENT,
         (CASE WHEN TB1.IS_TEMPORARY_PROPOSED = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS TEMPORARY,
@@ -581,6 +583,7 @@ async function listApprovalHistory(requestId) {
         CONCAT(TB4.INITIALS, '-', TB4.USERNAME) COLLATE DATABASE_DEFAULT AS APPROVER_NAME,
         TB4.CURRENT_EMAIL COLLATE DATABASE_DEFAULT AS APPROVER_EMAIL,
         FORMAT(TB1.UPDATED_DATE, 'dd MMM yyyy, hh:mm tt') COLLATE DATABASE_DEFAULT AS LAST_UPDATE_DATE,
+        TB1.UPDATED_DATE AS UPDATED_AT,
         CONCAT(TB5.INITIALS, '-', TB5.USERNAME) COLLATE DATABASE_DEFAULT AS LAST_UPDATE_BY,
         (CASE WHEN TB1.IS_PERMANENT = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS PERMANENT,
         (CASE WHEN TB1.IS_TEMPORARY = '1' THEN 'Yes' ELSE 'No' END) COLLATE DATABASE_DEFAULT AS TEMPORARY,
@@ -1843,11 +1846,7 @@ async function processFinalAction(id, action, payload, updatedBy, isSystemAdmin 
     if (action === 'finalConfirm') {
       const approvedRows = await database.query(
           `SELECT TOP 1
-            ID, LIMIT_AMOUNT, TERM_ID, RATING_ID, VALID_FROM, VALID_TO,
-            DESCRIPTION, IS_PERMANENT, IS_TEMPORARY,
-            IS_CLEAR_OUTSTANDING_BALANCE, IS_WITHIN_APPROVED_LIMIT,
-            IS_BANK_GUARANTEE, BANK_GUARANTEE_AMOUNT,
-            IS_CASH_DEPOSIT, CASH_DEPOSIT_AMOUNT
+            ID
          FROM APPROVALS
          WHERE CONVERT(VARCHAR(36), REQUEST_ID) COLLATE DATABASE_DEFAULT
              = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
@@ -1866,49 +1865,6 @@ async function processFinalAction(id, action, payload, updatedBy, isSystemAdmin 
       );
       const approved = approvedRows[0];
       if (!approved) throw validationError('No approved result is available for this request.');
-
-      await database.query(
-        `UPDATE APPROVALS
-         SET DESCRIPTION = :description,
-             LIMIT_AMOUNT = :limitAmount,
-             TERM_ID = :termId,
-             RATING_ID = :ratingId,
-             IS_PERMANENT = :isPermanent,
-             IS_TEMPORARY = :isTemporary,
-             VALID_FROM = :validFrom,
-             VALID_TO = :validTo,
-             IS_CLEAR_OUTSTANDING_BALANCE = :clearOutstanding,
-             IS_WITHIN_APPROVED_LIMIT = :withinLimit,
-             IS_BANK_GUARANTEE = :bankGuarantee,
-             BANK_GUARANTEE_AMOUNT = :bankGuaranteeAmount,
-             IS_CASH_DEPOSIT = :cashDeposit,
-             CASH_DEPOSIT_AMOUNT = :cashDepositAmount,
-             UPDATED_BY = :updatedBy,
-             UPDATED_DATE = GETDATE()
-         WHERE ID = :approvalId AND ENABLED = '1'`,
-        {
-          replacements: {
-            approvalId: approved.ID,
-            description: normalizedUpdate.DESCRIPTION,
-            limitAmount: normalizedUpdate.LIMIT_AMOUNT,
-            termId: normalizedUpdate.TERM_ID,
-            ratingId: normalizedUpdate.RATING_ID,
-            isPermanent: normalizedUpdate.IS_PERMANENT,
-            isTemporary: normalizedUpdate.IS_TEMPORARY,
-            validFrom: normalizedUpdate.VALID_FROM,
-            validTo: normalizedUpdate.VALID_TO,
-            clearOutstanding: normalizedUpdate.IS_CLEAR_OUTSTANDING_BALANCE,
-            withinLimit: normalizedUpdate.IS_WITHIN_APPROVED_LIMIT,
-            bankGuarantee: normalizedUpdate.IS_BANK_GUARANTEE,
-            bankGuaranteeAmount: normalizedUpdate.BANK_GUARANTEE_AMOUNT,
-            cashDeposit: normalizedUpdate.IS_CASH_DEPOSIT,
-            cashDepositAmount: normalizedUpdate.CASH_DEPOSIT_AMOUNT,
-            updatedBy,
-          },
-          type: QueryTypes.UPDATE,
-          transaction,
-        },
-      );
 
       Object.assign(update, {
         APPROVED_LIMIT_AMOUNT: normalizedUpdate.LIMIT_AMOUNT,

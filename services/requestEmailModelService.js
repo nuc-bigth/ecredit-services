@@ -169,6 +169,9 @@ function mapRequestToEmailModel(request, dear = '-', approvalHistory = []) {
     .sort((left, right) => right.sorting - left.sorting)[0] || null;
   const currentStep = selectCurrentStep(creditDetailsMovements);
   const lastActionedStep = selectLastActionedStep(creditDetailsMovements, currentStep);
+  const hideLastActionedDetails = Boolean(
+    lastActionedStep && /BDS|Review/i.test(String(lastActionedStep.approverType || ''))
+  );
 
   return {
     dear: valueOrDash(dear),
@@ -263,6 +266,7 @@ function mapRequestToEmailModel(request, dear = '-', approvalHistory = []) {
     },
     currentStep: currentStep || emptyCreditDetailsMovement(),
     lastActionedStep: lastActionedStep || emptyCreditDetailsMovement(),
+    hideLastActionedDetails,
   };
 }
 

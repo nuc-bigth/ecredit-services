@@ -183,6 +183,29 @@ describe('requestEmailModelService', () => {
       approver: 'NUT',
       clearOutstandingBalanceYes: false,
     }));
+    expect(model.hideLastActionedDetails).toBe(false);
+  });
+
+  test('hides last-action details when the last actioned step was BDS Review', () => {
+    const model = mapRequestToEmailModel({}, '-', [
+      { APPROVER_TYPE_NAME: 'Requester', APPROVAL_TYPE_NAME: 'Requested', APPROVER_NAME: 'ANM-ANUSORNM', SORTING: 1, CURRENT_CYCLE: true },
+      { APPROVER_TYPE_NAME: 'BDS Review', APPROVAL_TYPE_NAME: 'Suggested', APPROVER_NAME: 'NUC-NUTTAPONGC', SORTING: 2, CURRENT_CYCLE: true },
+      { APPROVER_TYPE_NAME: 'Section Manager Approve (Finance)', APPROVAL_TYPE_NAME: 'Pending', APPROVER_NAME: 'TRP-TRIPORNP', SORTING: 3, CURRENT_CYCLE: true },
+    ]);
+
+    expect(model.lastActionedStep).toEqual(expect.objectContaining({ approverType: 'BDS Review' }));
+    expect(model.hideLastActionedDetails).toBe(true);
+  });
+
+  test('keeps last-action details when the last actioned step was not BDS Review', () => {
+    const model = mapRequestToEmailModel({}, '-', [
+      { APPROVER_TYPE_NAME: 'Requester', APPROVAL_TYPE_NAME: 'Requested', APPROVER_NAME: 'ANM-ANUSORNM', SORTING: 1, CURRENT_CYCLE: true },
+      { APPROVER_TYPE_NAME: 'Credit Team', APPROVAL_TYPE_NAME: 'Suggested', APPROVER_NAME: 'NUT', SORTING: 2, CURRENT_CYCLE: true },
+      { APPROVER_TYPE_NAME: 'Section Manager Approve (Finance)', APPROVAL_TYPE_NAME: 'Pending', APPROVER_NAME: 'TRP-TRIPORNP', SORTING: 3, CURRENT_CYCLE: true },
+    ]);
+
+    expect(model.lastActionedStep).toEqual(expect.objectContaining({ approverType: 'Credit Team' }));
+    expect(model.hideLastActionedDetails).toBe(false);
   });
 
   test('uses dash values for current step when approval history is empty', () => {

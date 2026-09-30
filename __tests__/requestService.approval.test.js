@@ -246,7 +246,7 @@ describe('requestService.processApprovalAction', () => {
     expect(database.transaction).not.toHaveBeenCalled();
   });
 
-  it('copies the last approved values before completing a final request', async () => {
+  it('keeps the previous approval movement unchanged when completing a final request', async () => {
     database.query
       .mockResolvedValueOnce([{ ID: requestId }])
       .mockResolvedValueOnce([{
@@ -297,6 +297,9 @@ describe('requestService.processApprovalAction', () => {
       }),
       expect.objectContaining({ transaction }),
     );
+    expect(database.query).toHaveBeenCalledTimes(2);
+    expect(database.query.mock.calls[1][0]).toContain('SELECT TOP 1');
+    expect(database.query.mock.calls[1][0]).not.toContain('UPDATE APPROVALS');
     expect(transaction.commit).toHaveBeenCalledTimes(1);
   });
 

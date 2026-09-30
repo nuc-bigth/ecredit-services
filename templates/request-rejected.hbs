@@ -340,7 +340,7 @@
                             </tr>
                         </table>
 
-                        <p class="section-title">Credit Details</p>
+                        <p class="section-title">Credit Proposal Summary</p>
                         <table class="credit-detail-table" role="presentation" width="100%" cellspacing="0"
                             cellpadding="0">
                             <tr>
@@ -447,21 +447,13 @@
                         </table>
                         {{/if}}
 
-                        <p class="section-title">Credit Adjustment (Credit Team)</p>
+                        <p class="section-title">Credit Team Recommendation</p>
                         <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
                             <tr>
-                                <td class="label">Temporary Adjustment</td>
-                                <td class="value">{{#if suggestedCreditDetails.temporaryYes}}{{suggestedCreditDetails.validFrom}} - {{suggestedCreditDetails.validTo}}{{else}}-{{/if}}</td>
+                                <td class="label">Comment</td>
+                                <td class="value">{{{opinion}}}</td>
                             </tr>
-                            <tr>
-                                <td class="label">Permanent Adjustment</td>
-                                <td class="value">{{#if suggestedCreditDetails.permanentYes}}{{suggestedCreditDetails.validFrom}}{{else}}-{{/if}}</td>
-                            </tr>
-                        </table>
-
-                        {{#if showAdditionalConditions}}
-                        <p class="section-title">Additional Conditions (Credit Team)</p>
-                        <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                            {{#if showAdditionalConditions}}
                             <tr>
                                 <td class="label">Clear outstanding balance</td>
                                 <td class="value">{{#if clearOutstandingBalance}}<span class="status-yes">&#10003;</span>{{else}}<span class="status-no">&#10007;</span>{{/if}}</td>
@@ -478,14 +470,14 @@
                                 <td class="label">Cash deposit</td>
                                 <td class="value">{{amountDeposit}}</td>
                             </tr>
-                        </table>
-                        {{/if}}
-
-                        <p class="section-title">Opinion (Credit Team)</p>
-                        <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                            {{/if}}
                             <tr>
-                                <td class="label">Comment</td>
-                                <td class="value">{{{opinion}}}</td>
+                                <td class="label">Temporary Adjustment</td>
+                                <td class="value">{{#if suggestedCreditDetails.temporaryYes}}{{suggestedCreditDetails.validFrom}} - {{suggestedCreditDetails.validTo}}{{else}}-{{/if}}</td>
+                            </tr>
+                            <tr>
+                                <td class="label">Permanent Adjustment</td>
+                                <td class="value">{{#if suggestedCreditDetails.permanentYes}}{{suggestedCreditDetails.validFrom}}{{else}}-{{/if}}</td>
                             </tr>
                         </table>
 
@@ -517,7 +509,8 @@
             </table>
             {{/if}}
 
-            <p class="section-title">Details Last actioned by {{lastActionedStep.approver}}</p>
+            {{#unless hideLastActionedDetails}}
+            <p class="section-title">Latest Approval Action by {{lastActionedStep.approver}}</p>
             <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
                     <td class="label">Comment</td>
@@ -566,6 +559,7 @@
                         lastActionedStep.permanentYes}}{{lastActionedStep.validFrom}}{{else}}-{{/if}}</td>
                 </tr>
             </table>
+            {{/unless}}
             <p style="margin: 26px 0 4px;">You can access to this request by following 
                 <a href="{{link}}" target="_blank" style="color: #007a3d; font-weight: bold;">
                     Link
