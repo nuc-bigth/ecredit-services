@@ -1,3 +1,4 @@
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
     body {
         margin: 0;
@@ -253,6 +254,23 @@
 
     .email-debug-footer strong {
         color: #241500;
+    }
+
+    @media screen and (max-width: 640px) {
+        body { font-size: 13px; }
+        .email-container { width: 100% !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; }
+        .brand-header td { padding: 22px 18px !important; }
+        .brand-name { font-size: 20px !important; }
+        .brand-subtitle { font-size: 13px !important; }
+        .email-content { padding: 24px 16px 20px !important; }
+        .section-title { margin-top: 22px; }
+        .info-table td { display: block; width: auto !important; padding: 8px 10px !important; }
+        .info-table .label { padding-bottom: 3px !important; border-bottom: 0 !important; }
+        .info-table .value { padding-top: 3px !important; }
+        .credit-detail-table { display: block; width: 100% !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+        .credit-detail-table th, .credit-detail-table td { min-width: 130px; padding: 9px 7px !important; word-break: break-word; }
+        .credit-movement-values td { display: block; width: auto !important; }
+        .email-footer td, .email-debug-footer td { padding: 16px 18px !important; }
     }
 </style>
 
