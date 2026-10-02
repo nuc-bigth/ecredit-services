@@ -6,6 +6,7 @@ const {
   resolveRecipients,
   buildApprovalSubject,
   buildCompletedSubject,
+  buildCancelledSubject,
 } = require('../services/requestWorkflowNotificationService');
 
 function approval(overrides = {}) {
@@ -33,6 +34,13 @@ describe('request workflow notification recipients', () => {
       companyName: 'Pentel Co., Ltd.',
       salesGroup: '100 - TGEE',
     })).toBe('Completed for your requested Pentel Co., Ltd. (100 - TGEE)');
+  });
+
+  it('builds the cancelled subject from company name and sales group', () => {
+    expect(buildCancelledSubject({
+      companyName: 'Pentel Co., Ltd.',
+      salesGroup: '100 - TGEE',
+    })).toBe('Request was cancelled Pentel Co., Ltd. (100 - TGEE)');
   });
 
   it('groups all pending approvers from the first pending step', () => {
@@ -103,6 +111,33 @@ describe('request workflow notification recipients', () => {
       ],
       ccRecords: [{ email: 'actor@example.com', name: 'ACTOR' }],
       dear: 'ACTOR',
+    });
+  });
+
+  it('sends cancellation to the requester and copies all current-cycle approvers', () => {
+    const history = [
+      {
+        APPROVER_TYPE_NAME: 'Requester',
+        APPROVER_NAME: 'REQUESTER',
+        APPROVER_EMAIL: 'requester@example.com',
+        CURRENT_CYCLE: true,
+      },
+      approval({ APPROVER_NAME: 'FINANCE', APPROVER_EMAIL: 'finance@example.com' }),
+      approval({
+        APPROVER_TYPE_NAME: 'BDS Review',
+        APPROVER_NAME: 'BDS',
+        APPROVER_EMAIL: 'bds@example.com',
+        APPROVAL_TYPE_NAME: 'Suggested',
+      }),
+    ];
+
+    expect(resolveRecipients('cancel', history, { email: 'actor@example.com', displayName: 'ACTOR' })).toEqual({
+      toRecords: [{ email: 'requester@example.com', name: 'REQUESTER' }],
+      ccRecords: [
+        { email: 'finance@example.com', name: 'FINANCE' },
+        { email: 'bds@example.com', name: 'BDS' },
+      ],
+      dear: 'REQUESTER',
     });
   });
 });

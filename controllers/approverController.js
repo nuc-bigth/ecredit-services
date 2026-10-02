@@ -1,0 +1,105 @@
+const approverService = require('../services/approverService');
+
+function requireSystemAdmin(req) {
+  if (req.user?.profile?.ROLE === 'System Admin') return;
+  const error = new Error('Only the System Admin role can manage approvers.');
+  error.statusCode = 403;
+  error.code = 'FORBIDDEN';
+  throw error;
+}
+
+function actorCode(req) {
+  return req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE;
+}
+
+function requireActorCode(req) {
+  const value = actorCode(req);
+  if (!value) {
+    const error = new Error('Authenticated user profile is missing an employee code.');
+    error.statusCode = 403;
+    error.code = 'FORBIDDEN';
+    throw error;
+  }
+  return value;
+}
+
+function validationError(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  error.code = 'VALIDATION_ERROR';
+  return error;
+}
+
+function parsePayload(body) {
+  const employeeCode = String(body?.employeeCode ?? '').trim();
+  if (!employeeCode) throw validationError('employeeCode is required.');
+  if (typeof body?.enabled !== 'boolean') throw validationError('enabled must be a boolean.');
+  return { employeeCode, enabled: body.enabled };
+}
+
+function sendResult(res, result, resourceName) {
+  if (result.kind === 'employee-not-found') throw validationError('The selected employee was not found.');
+  if (result.kind === 'duplicate') throw validationError('This employee is already assigned as an approver.');
+  if (result.kind === 'not-found') {
+    const error = new Error(`${resourceName} was not found.`);
+    error.statusCode = 404;
+    error.code = 'RESOURCE_NOT_FOUND';
+    throw error;
+  }
+  return res.status(200).json({ success: true, data: result.item, correlationId: res.locals.correlationId || 'N/A' });
+}
+
+async function list(req, res, next) {
+  try {
+    requireSystemAdmin(req);
+    const data = await approverService.listApprovers(req.query);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.status(200).json({ success: true, data, correlationId: res.locals.correlationId || 'N/A' });
+  } catch (error) { next(error); }
+}
+
+async function employeeOptions(req, res, next) {
+  try {
+    requireSystemAdmin(req);
+    const data = await approverService.listEmployeeOptions(req.query.search);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.status(200).json({ success: true, data, correlationId: res.locals.correlationId || 'N/A' });
+  } catch (error) { next(error); }
+}
+
+async function create(req, res, next) {
+  try {
+    requireSystemAdmin(req);
+    const payload = parsePayload(req.body);
+    const result = await approverService.createApprover(payload.employeeCode, payload.enabled, requireActorCode(req));
+    return sendResult(res, result, 'Approver');
+  } catch (error) { return next(error); }
+}
+
+async function update(req, res, next) {
+  try {
+    requireSystemAdmin(req);
+    const payload = parsePayload(req.body);
+    const result = await approverService.updateApprover(req.params.id, payload.employeeCode, payload.enabled, requireActorCode(req));
+    return sendResult(res, result, 'Approver');
+  } catch (error) { return next(error); }
+}
+
+async function setActive(req, res, next) {
+  try {
+    requireSystemAdmin(req);
+    if (typeof req.body?.enabled !== 'boolean') throw validationError('enabled must be a boolean.');
+    const result = await approverService.setActive(req.params.id, req.body.enabled, requireActorCode(req));
+    return sendResult(res, result, 'Approver');
+  } catch (error) { return next(error); }
+}
+
+async function remove(req, res, next) {
+  try {
+    requireSystemAdmin(req);
+    const result = await approverService.softDelete(req.params.id, requireActorCode(req));
+    return sendResult(res, result, 'Approver');
+  } catch (error) { return next(error); }
+}
+
+module.exports = { list, employeeOptions, create, update, setActive, remove };

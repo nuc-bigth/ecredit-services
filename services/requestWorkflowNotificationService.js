@@ -72,6 +72,13 @@ function bdsReviewApprovers(history) {
     ));
 }
 
+function allApprovers(history) {
+    return currentCycleHistory(history).filter((item) => (
+        !/Requester/i.test(String(item.APPROVER_TYPE_NAME || ''))
+        && String(item.APPROVER_EMAIL || '').trim()
+    ));
+}
+
 function resolveRecipients(event, history, actor) {
     if (event === 'submit' || event === 'approve') {
         const approvers = pendingApprovers(history);
@@ -91,7 +98,16 @@ function resolveRecipients(event, history, actor) {
         };
     }
 
-    if (event === 'completed' || event === 'final-cancel') {
+    if (event === 'cancel' || event === 'final-cancel') {
+        const requester = submitter(history);
+        return {
+            toRecords: requester ? [recipient(requester.APPROVER_EMAIL, requester.APPROVER_NAME)] : [],
+            ccRecords: allApprovers(history).map((item) => recipient(item.APPROVER_EMAIL, item.APPROVER_NAME)),
+            dear: requester?.APPROVER_NAME || 'All',
+        };
+    }
+
+    if (event === 'completed') {
         const requester = submitter(history);
         const bdsApprovers = bdsReviewApprovers(history);
         return {
@@ -128,6 +144,10 @@ function buildApprovalSubject(emailModel) {
 
 function buildCompletedSubject(emailModel) {
     return `Completed for your requested ${emailModel.companyName} (${emailModel.salesGroup})`;
+}
+
+function buildCancelledSubject(emailModel) {
+    return `Request was cancelled ${emailModel.companyName} (${emailModel.salesGroup})`;
 }
 
 function approvalActionsFor(requestId, approvers) {
@@ -178,6 +198,8 @@ async function sendRequestWorkflowNotification({ event, requestId, environment, 
             ? `${eventConfig.subject} ${emailModel.companyName} (${emailModel.salesGroup})`
             : event === 'completed'
                 ? buildCompletedSubject(emailModel)
+                : event === 'cancel' || event === 'final-cancel'
+                    ? buildCancelledSubject(emailModel)
             : eventConfig.subject;
     if (!approvalApprovers.length) {
         return sendRequestWorkflowEmail({ environment: normalizedEnvironment, template: eventConfig.template, subject, emailModel, recipients, actorEmail, transporter, requestId, user });
@@ -220,6 +242,7 @@ module.exports = {
     resolveRecipients,
     buildApprovalSubject,
     buildCompletedSubject,
+    buildCancelledSubject,
     sendRequestWorkflowNotification,
     notifyBestEffort,
 };

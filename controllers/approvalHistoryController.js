@@ -2,6 +2,7 @@ const requestService = require('../services/requestService');
 const { notifyBestEffort } = require('../services/requestWorkflowNotificationService');
 
 const FINAL_STATUS_ID = '014e8e8b-42cf-4b2f-8cae-e395e26efbcd';
+const COMPLETED_STATUS_ID = '407e23f9-caf5-4c4a-801d-598cf437d1ae';
 
 async function listApprovalHistory(req, res, next) {
   try {
@@ -43,7 +44,7 @@ async function submitRequest(req, res, next) {
     }
     const request = await requestService.submitRequest(req.params.id, req.body, updatedBy);
     await notifyBestEffort({
-      event: 'submit',
+      event: String(request?.STATUS_ID || '') === COMPLETED_STATUS_ID ? 'completed' : 'submit',
       requestId: req.params.id,
       environment: process.env.NODE_ENV,
       actorEmail: req.user?.email,

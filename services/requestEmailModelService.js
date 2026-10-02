@@ -169,9 +169,26 @@ function mapRequestToEmailModel(request, dear = '-', approvalHistory = []) {
     .sort((left, right) => right.sorting - left.sorting)[0] || null;
   const currentStep = selectCurrentStep(creditDetailsMovements);
   const lastActionedStep = selectLastActionedStep(creditDetailsMovements, currentStep);
+  const finalActionedStep = currentStep && currentStep.approvalStatus === 'Approved'
+    ? currentStep
+    : lastActionedStep;
   const hideLastActionedDetails = Boolean(
     lastActionedStep && /BDS|Review/i.test(String(lastActionedStep.approverType || ''))
   );
+  const finalConfirmedDetails = {
+    comment: valueOrDash(request.APPROVED_NOTES),
+    creditTerm: valueOrDash(request.approvedTerm?.NAME),
+    creditLimit: formatMoney(request.APPROVED_LIMIT_AMOUNT),
+    creditRating: valueOrDash(request.approvedRating?.NAME),
+    temporaryYes: isEnabled(request.IS_TEMPORARY_APPROVED),
+    permanentYes: isEnabled(request.IS_PERMANENT_APPROVED),
+    validFrom: formatDate(request.APPROVED_VALID_FROM),
+    validTo: formatDate(request.APPROVED_VALID_TO),
+    clearOutstandingBalanceYes: approvedCreditMovement?.clearOutstandingBalanceYes || false,
+    withinApprovedLimitYes: approvedCreditMovement?.withinApprovedLimitYes || false,
+    bankGuaranteeAmount: approvedCreditMovement?.bankGuaranteeAmount || '-',
+    cashDepositAmount: approvedCreditMovement?.cashDepositAmount || '-',
+  };
 
   return {
     dear: valueOrDash(dear),
@@ -224,20 +241,11 @@ function mapRequestToEmailModel(request, dear = '-', approvalHistory = []) {
     creditLimitApproved: formatMoney(request.APPROVED_LIMIT_AMOUNT),
     creditRatingApproved: valueOrDash(request.approvedRating?.NAME),
     approvedOpinion: valueOrDash(request.APPROVED_NOTES),
+    cancelledNotes: valueOrDash(request.CANCELLED_NOTES),
     approvedCreditDetails: {
-      creditTerm: valueOrDash(request.approvedTerm?.NAME),
-      creditLimit: formatMoney(request.APPROVED_LIMIT_AMOUNT),
-      creditRating: valueOrDash(request.approvedRating?.NAME),
-      temporaryYes: isEnabled(request.IS_TEMPORARY_APPROVED),
-      permanentYes: isEnabled(request.IS_PERMANENT_APPROVED),
-      validFrom: formatDate(request.APPROVED_VALID_FROM),
-      validTo: formatDate(request.APPROVED_VALID_TO),
-      clearOutstandingBalanceYes: approvedCreditMovement?.clearOutstandingBalanceYes || false,
-      withinApprovedLimitYes: approvedCreditMovement?.withinApprovedLimitYes || false,
+      ...finalConfirmedDetails,
       bankGuarantee: approvedCreditMovement?.bankGuarantee === 'Yes',
-      bankGuaranteeAmount: approvedCreditMovement?.bankGuaranteeAmount || '-',
       cashDeposit: approvedCreditMovement?.cashDeposit === 'Yes',
-      cashDepositAmount: approvedCreditMovement?.cashDepositAmount || '-',
       showAdditionalConditions: Boolean(
         approvedCreditMovement?.clearOutstandingBalanceYes
         || approvedCreditMovement?.withinApprovedLimitYes
@@ -245,6 +253,7 @@ function mapRequestToEmailModel(request, dear = '-', approvalHistory = []) {
         || approvedCreditMovement?.cashDeposit === 'Yes'
       ),
     },
+    finalConfirmedDetails,
     creditDetailsMovements,
     creditDetailsSummary: mapCreditDetailsSummary(creditDetailsMovements, currentStep, lastActionedStep),
     suggestedCreditDetails: suggestedCreditDetails ? {
@@ -266,6 +275,7 @@ function mapRequestToEmailModel(request, dear = '-', approvalHistory = []) {
     },
     currentStep: currentStep || emptyCreditDetailsMovement(),
     lastActionedStep: lastActionedStep || emptyCreditDetailsMovement(),
+    finalActionedStep: finalActionedStep || emptyCreditDetailsMovement(),
     hideLastActionedDetails,
   };
 }

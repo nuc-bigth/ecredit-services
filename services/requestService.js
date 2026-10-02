@@ -290,6 +290,7 @@ function mapRequest(request) {
     SUBJECT: request.DESCRIPTION || '',
     PROPOSED_DISPLAYED_NOTES: request.PROPOSED_DISPLAYED_NOTES || '',
     PROPOSED_NOTES: request.PROPOSED_NOTES || '',
+    CANCELLED_NOTES: request.CANCELLED_NOTES || '',
     REF_FINANCIAL_STATEMENT_FY: formatDate(request.REF_FINANCIAL_STATEMENT_FY),
     SUBMITTED_BY: request.SUBMITTED_BY === null || request.SUBMITTED_BY === undefined
       ? null : Number(request.SUBMITTED_BY),
@@ -363,13 +364,15 @@ function mapRequest(request) {
     CUSTOMER_DIRECTORS: request.CUSTOMER_DIRECTORS || '',
     CUSTOMER_ADDRESS: request.CUSTOMER_ADDRESS || '',
     IS_RATING_REQUESTED: isNonBlank(requestedRating) ? 1 : 0,
-    IS_LIMIT_REQUESTED: requestedLimit !== 0 ? 1 : 0,
-    IS_TERM_REQUESTED: isNonBlank(requestedTerm) ? 1 : 0,
+    IS_LIMIT_REQUESTED: Boolean(request.IS_LIMIT_REQUESTED),
+    IS_TERM_REQUESTED: Boolean(request.IS_TERM_REQUESTED),
+    IS_LIMIT_PROPOSED: Boolean(request.IS_LIMIT_PROPOSED),
+    IS_TERM_PROPOSED: Boolean(request.IS_TERM_PROPOSED),
     IS_PERMANENT_PROPOSED: Boolean(request.IS_PERMANENT_PROPOSED),
     IS_TEMPORARY_PROPOSED: Boolean(request.IS_TEMPORARY_PROPOSED),
     IS_RATING_APPROVED: isNonBlank(approvedRating) ? 1 : 0,
-    IS_LIMIT_APPROVED: approvedLimit !== 0 ? 1 : 0,
-    IS_TERM_APPROVED: isNonBlank(approvedTerm) ? 1 : 0,
+    IS_LIMIT_APPROVED: Boolean(request.IS_LIMIT_APPROVED),
+    IS_TERM_APPROVED: Boolean(request.IS_TERM_APPROVED),
   };
 }
 
@@ -700,23 +703,15 @@ async function submitRequest(id, command, updatedBy) {
   const creditUpdate = normalizeRequestCreditSuggestion(command.creditSuggestion ?? {});
   const scoringUpdate = normalizeRequestScoringAndPayment(command.scoringAndPayment ?? {});
   const requestedUpdate = normalizeRequestRequestedDetails(command.requestedDetails ?? {});
-  const approvalValues = { ...creditUpdate };
-  const requiresApproval = requestedUpdate.IS_TERM_REQUESTED
-    || requestedUpdate.IS_LIMIT_REQUESTED
-    || Boolean(creditUpdate.PROPOSED_RATING_ID);
   const normalizedSteps = normalizeSubmitSteps(command.steps ?? []);
+  const approvalValues = { ...creditUpdate };
+  const hasApprovalSteps = normalizedSteps.length > 0;
+  const requiresApproval = hasApprovalSteps;
   const submittedByValue = command.bdsReviewApproverId === undefined
     ? String(updatedBy)
     : String(command.bdsReviewApproverId ?? '').trim();
   if (!/^\d+$/.test(submittedByValue)) throw validationError('BDS Review approver is required.');
   const submittedBy = Number(submittedByValue);
-  if (requiresApproval && !normalizedSteps.length) {
-    throw validationError('At least one approval step is required.');
-  }
-  if (!requiresApproval && normalizedSteps.length) {
-    throw validationError('Approval steps are not allowed when credit term and credit limit are not included.');
-  }
-
   const database = getDatabase();
   const transaction = await database.transaction();
   try {
@@ -806,7 +801,7 @@ async function submitRequest(id, command, updatedBy) {
       if (!approverIds.has(step.approverId)) throw validationError(`Approval step ${index + 1} uses an invalid approver.`);
     });
 
-    await request.update({
+    const requestUpdate = {
       ...customerUpdate,
       ...creditUpdate,
       ...scoringUpdate,
@@ -816,7 +811,22 @@ async function submitRequest(id, command, updatedBy) {
       SUBMITTED_BY: submittedBy,
       UPDATED_BY: updatedBy,
       UPDATED_DATE: Request.sequelize.fn('GETDATE'),
-    }, { transaction });
+    };
+    if (!hasApprovalSteps) {
+      Object.assign(requestUpdate, {
+        APPROVED_LIMIT_AMOUNT: creditUpdate.PROPOSED_LIMIT_AMOUNT,
+        APPROVED_TERM_ID: creditUpdate.PROPOSED_TERM_ID,
+        IS_LIMIT_APPROVED: creditUpdate.IS_LIMIT_PROPOSED,
+        IS_TERM_APPROVED: creditUpdate.IS_TERM_PROPOSED,
+        APPROVED_RATING_ID: creditUpdate.PROPOSED_RATING_ID,
+        APPROVED_VALID_FROM: creditUpdate.PROPOSED_VALID_FROM,
+        APPROVED_VALID_TO: creditUpdate.PROPOSED_VALID_TO,
+        APPROVED_NOTES: creditUpdate.PROPOSED_NOTES,
+        IS_PERMANENT_APPROVED: creditUpdate.IS_PERMANENT_PROPOSED,
+        IS_TEMPORARY_APPROVED: creditUpdate.IS_TEMPORARY_PROPOSED,
+      });
+    }
+    await request.update(requestUpdate, { transaction });
 
     for (const step of normalizedSteps) {
       await database.query(
@@ -837,8 +847,8 @@ async function submitRequest(id, command, updatedBy) {
           replacements: {
             approvalId: randomUUID(), requestId: id, approverTypeId: step.approverTypeId,
             approvalTypeId: PENDING_APPROVAL_TYPE_ID, approverId: step.approverId, description: '',
-            limitAmount: requestedUpdate.IS_LIMIT_REQUESTED ? approvalValues.PROPOSED_LIMIT_AMOUNT : null,
-            termId: requestedUpdate.IS_TERM_REQUESTED ? approvalValues.PROPOSED_TERM_ID : null,
+            limitAmount: approvalValues.IS_LIMIT_PROPOSED ? approvalValues.PROPOSED_LIMIT_AMOUNT : null,
+            termId: approvalValues.IS_TERM_PROPOSED ? approvalValues.PROPOSED_TERM_ID : null,
             ratingId: approvalValues.PROPOSED_RATING_ID, isPermanent: approvalValues.IS_PERMANENT_PROPOSED,
             isTemporary: approvalValues.IS_TEMPORARY_PROPOSED, validFrom: approvalValues.PROPOSED_VALID_FROM,
             validTo: approvalValues.PROPOSED_VALID_TO,
@@ -979,6 +989,7 @@ function normalizeCreditSuggestionId(value, field) {
 function normalizeRequestCreditSuggestion(payload) {
   const fields = [
     'PROPOSED_TERM_ID', 'PROPOSED_LIMIT_AMOUNT', 'PROPOSED_RATING_ID',
+    'IS_TERM_PROPOSED', 'IS_LIMIT_PROPOSED',
     'PROPOSED_DISPLAYED_NOTES', 'PROPOSED_NOTES',
     'IS_CLEAR_OUTSTANDING_BALANCE_PROPOSED', 'IS_WITHIN_APPROVED_LIMIT_PROPOSED',
     'IS_BANK_GUARANTEE_PROPOSED', 'PROPOSED_BANK_GUARANTEE_AMOUNT',
@@ -1006,7 +1017,7 @@ function normalizeRequestCreditSuggestion(payload) {
 
   const limit = update.PROPOSED_LIMIT_AMOUNT;
   if (limit === undefined || limit === null || limit === '') {
-    update.PROPOSED_LIMIT_AMOUNT = null;
+    update.PROPOSED_LIMIT_AMOUNT = 0;
   } else {
     const normalizedLimit = Number(limit);
     if (!Number.isFinite(normalizedLimit) || normalizedLimit < 0) {
@@ -1014,6 +1025,9 @@ function normalizeRequestCreditSuggestion(payload) {
     }
     update.PROPOSED_LIMIT_AMOUNT = normalizedLimit;
   }
+
+  update.IS_TERM_PROPOSED = Boolean(update.PROPOSED_TERM_ID);
+  update.IS_LIMIT_PROPOSED = update.PROPOSED_LIMIT_AMOUNT !== 0;
 
   [
     'IS_CLEAR_OUTSTANDING_BALANCE_PROPOSED', 'IS_WITHIN_APPROVED_LIMIT_PROPOSED',
@@ -1346,12 +1360,17 @@ async function cloneRequestData(targetId, sourceId, updatedBy) {
   }
 }
 
-async function cancelRequest(id, updatedBy) {
+async function cancelRequest(id, updatedBy, cancelledNotes) {
   const { Request } = getModels();
+  const normalizedNotes = typeof cancelledNotes === 'string'
+    ? cancelledNotes.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim()
+    : '';
+  if (!normalizedNotes) throw validationError('Cancellation reason is required.');
 
   const [affectedRows] = await Request.update(
     {
       STATUS_ID: CANCELLED_STATUS_ID,
+      CANCELLED_NOTES: cancelledNotes,
       UPDATED_DATE: Request.sequelize.fn('GETDATE'),
       UPDATED_BY: updatedBy,
     },
@@ -1498,6 +1517,8 @@ async function saveFinalApproval(id, payload, updatedBy, isSystemAdmin = false) 
       {
         APPROVED_LIMIT_AMOUNT: normalizedUpdate.LIMIT_AMOUNT,
         APPROVED_TERM_ID: normalizedUpdate.TERM_ID,
+        IS_LIMIT_APPROVED: Number(normalizedUpdate.LIMIT_AMOUNT ?? 0) !== 0,
+        IS_TERM_APPROVED: Boolean(normalizedUpdate.TERM_ID),
         APPROVED_RATING_ID: normalizedUpdate.RATING_ID,
         APPROVED_VALID_FROM: normalizedUpdate.VALID_FROM
           ? databaseDateFromYmd(Request.sequelize, normalizedUpdate.VALID_FROM) : null,
@@ -1760,6 +1781,20 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
         await Request.update(
           {
             STATUS_ID: FINAL_STATUS_ID,
+            APPROVED_LIMIT_AMOUNT: normalizedUpdate.LIMIT_AMOUNT,
+            APPROVED_TERM_ID: normalizedUpdate.TERM_ID,
+            IS_LIMIT_APPROVED: Number(normalizedUpdate.LIMIT_AMOUNT ?? 0) !== 0,
+            IS_TERM_APPROVED: Boolean(normalizedUpdate.TERM_ID),
+            APPROVED_RATING_ID: normalizedUpdate.RATING_ID,
+            APPROVED_VALID_FROM: normalizedUpdate.VALID_FROM
+              ? databaseDateFromYmd(Request.sequelize, normalizedUpdate.VALID_FROM)
+              : null,
+            APPROVED_VALID_TO: normalizedUpdate.VALID_TO
+              ? databaseDateFromYmd(Request.sequelize, normalizedUpdate.VALID_TO)
+              : null,
+            APPROVED_NOTES: normalizedUpdate.DESCRIPTION,
+            IS_PERMANENT_APPROVED: normalizedUpdate.IS_PERMANENT,
+            IS_TEMPORARY_APPROVED: normalizedUpdate.IS_TEMPORARY,
             UPDATED_BY: updatedBy,
             UPDATED_DATE: Request.sequelize.fn('GETDATE'),
           },
@@ -1869,6 +1904,8 @@ async function processFinalAction(id, action, payload, updatedBy, isSystemAdmin 
       Object.assign(update, {
         APPROVED_LIMIT_AMOUNT: normalizedUpdate.LIMIT_AMOUNT,
         APPROVED_TERM_ID: normalizedUpdate.TERM_ID,
+        IS_LIMIT_APPROVED: Number(normalizedUpdate.LIMIT_AMOUNT ?? 0) !== 0,
+        IS_TERM_APPROVED: Boolean(normalizedUpdate.TERM_ID),
         APPROVED_RATING_ID: normalizedUpdate.RATING_ID,
         APPROVED_VALID_FROM: normalizedUpdate.VALID_FROM
           ? databaseDateFromYmd(Request.sequelize, normalizedUpdate.VALID_FROM)
@@ -1881,7 +1918,10 @@ async function processFinalAction(id, action, payload, updatedBy, isSystemAdmin 
         IS_TEMPORARY_APPROVED: normalizedUpdate.IS_TEMPORARY,
       });
     } else {
-      Object.assign(update, { APPROVED_NOTES: comment });
+      Object.assign(update, {
+        APPROVED_NOTES: comment,
+        CANCELLED_NOTES: comment,
+      });
     }
 
     await Request.update(update, { where: { ID: id, ENABLED: true }, transaction });

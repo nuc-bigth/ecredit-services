@@ -108,7 +108,7 @@
     }
 
     .rating-score {
-        color: #007a3d;
+        color: #009a49;
         font-size: 18px;
         font-weight: bold;
     }
@@ -151,7 +151,7 @@
     }
 
     .status-yes {
-        color: #007a3d;
+        color: #009a49;
         font-size: 18px;
         font-weight: bold;
     }
@@ -185,7 +185,7 @@
         padding: 2px 8px;
         border-radius: 999px;
         background: #e3f6ec;
-        color: #007a3d;
+        color: #009a49;
         font-size: 12px;
     }
 
@@ -257,20 +257,75 @@
     }
 
     @media screen and (max-width: 640px) {
-        body { font-size: 13px; }
-        .email-container { width: 100% !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; }
-        .brand-header td { padding: 22px 18px !important; }
-        .brand-name { font-size: 20px !important; }
-        .brand-subtitle { font-size: 13px !important; }
-        .email-content { padding: 24px 16px 20px !important; }
-        .section-title { margin-top: 22px; }
-        .info-table td { display: block; width: auto !important; padding: 8px 10px !important; }
-        .info-table .label { padding-bottom: 3px !important; border-bottom: 0 !important; }
-        .info-table .value { padding-top: 3px !important; }
-        .credit-detail-table { display: block; width: 100% !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
-        .credit-detail-table th, .credit-detail-table td { min-width: 130px; padding: 9px 7px !important; word-break: break-word; }
-        .credit-movement-values td { display: block; width: auto !important; }
-        .email-footer td, .email-debug-footer td { padding: 16px 18px !important; }
+        body {
+            font-size: 13px;
+        }
+
+        .email-container {
+            width: 100% !important;
+            margin: 0 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+        }
+
+        .brand-header td {
+            padding: 22px 18px !important;
+        }
+
+        .brand-name {
+            font-size: 20px !important;
+        }
+
+        .brand-subtitle {
+            font-size: 13px !important;
+        }
+
+        .email-content {
+            padding: 24px 16px 20px !important;
+        }
+
+        .section-title {
+            margin-top: 22px;
+        }
+
+        .info-table td {
+            display: block;
+            width: auto !important;
+            padding: 8px 10px !important;
+        }
+
+        .info-table .label {
+            padding-bottom: 3px !important;
+            border-bottom: 0 !important;
+        }
+
+        .info-table .value {
+            padding-top: 3px !important;
+        }
+
+        .credit-detail-table {
+            display: block;
+            width: 100% !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .credit-detail-table th,
+        .credit-detail-table td {
+            min-width: 130px;
+            padding: 9px 7px !important;
+            word-break: break-word;
+        }
+
+        .credit-movement-values td {
+            display: block;
+            width: auto !important;
+        }
+
+        .email-footer td,
+        .email-debug-footer td {
+            padding: 16px 18px !important;
+        }
     }
 </style>
 
@@ -281,23 +336,26 @@
                 <tr class="brand-header">
                     <td>
                         <p class="brand-name">e-Credit System</p>
-                        <p class="brand-subtitle">Credit request summary and approval details</p>
+                        <p class="brand-subtitle">Credit request summary and final confirmed details</p>
                     </td>
                 </tr>
                 <tr>
                     <td class="email-content">
                         <p class="greeting">Dear {{dear}},</p>
-                        <p class="intro">e-Credit has completed your request. The submitted and recommended credit
+                        <p class="intro">e-Credit has <span style="color: green; font-weight: bold;">Completed</span>
+                            your request. The submitted and recommended credit
                             details are provided below.</p>
 
                         <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
                             <tr>
                                 <td class="label">No.</td>
-                                <td class="value"><a href="{{linkRequestNo}}" target="_blank" style="color: #007a3d; font-weight: bold;">{{requestNo}}</a></td>
+                                <td class="value"><a href="{{linkRequestNo}}" target="_blank"
+                                        style="color: #009a49; font-weight: bold;">{{requestNo}}</a></td>
                             </tr>
                             <tr>
                                 <td class="label">CRM No.</td>
-                                <td class="value"><a href="{{linkCrmNo}}" target="_blank" style="color: #007a3d; font-weight: bold;">{{crmNo}}</a></td>
+                                <td class="value"><a href="{{linkCrmNo}}" target="_blank"
+                                        style="color: #009a49; font-weight: bold;">{{crmNo}}</a></td>
                             </tr>
                             <tr>
                                 <td class="label">Request Type</td>
@@ -378,25 +436,25 @@
                                     style="padding: 12px 8px; border-right: 1px solid #d6e6da; background-color: #fafdfb; color: #284534;">
                                     <span style="font-size: 12px; font-weight: bold;">Profitability</span><br>
                                     <span
-                                        style="color: #007a3d; font-size: 22px; font-weight: bold; line-height: 1.6;">{{profitability}}</span>
+                                        style="color: #009a49; font-size: 22px; font-weight: bold; line-height: 1.6;">{{profitability}}</span>
                                 </td>
                                 <td width="25%" align="center" valign="top"
                                     style="padding: 12px 8px; border-right: 1px solid #d6e6da; background-color: #fafdfb; color: #284534;">
                                     <span style="font-size: 12px; font-weight: bold;">Growth</span><br>
                                     <span
-                                        style="color: #007a3d; font-size: 22px; font-weight: bold; line-height: 1.6;">{{growth}}</span>
+                                        style="color: #009a49; font-size: 22px; font-weight: bold; line-height: 1.6;">{{growth}}</span>
                                 </td>
                                 <td width="25%" align="center" valign="top"
                                     style="padding: 12px 8px; border-right: 1px solid #d6e6da; background-color: #fafdfb; color: #284534;">
                                     <span style="font-size: 12px; font-weight: bold;">Liquidity</span><br>
                                     <span
-                                        style="color: #007a3d; font-size: 22px; font-weight: bold; line-height: 1.6;">{{liquidity}}</span>
+                                        style="color: #009a49; font-size: 22px; font-weight: bold; line-height: 1.6;">{{liquidity}}</span>
                                 </td>
                                 <td width="25%" align="center" valign="top"
                                     style="padding: 12px 8px; background-color: #fafdfb; color: #284534;">
                                     <span style="font-size: 12px; font-weight: bold;">Leverage</span><br>
                                     <span
-                                        style="color: #007a3d; font-size: 22px; font-weight: bold; line-height: 1.6;">{{leverage}}</span>
+                                        style="color: #009a49; font-size: 22px; font-weight: bold; line-height: 1.6;">{{leverage}}</span>
                                 </td>
                             </tr>
                             <tr>
@@ -448,149 +506,82 @@
                         </table>
                         {{/if}}
 
-                        <p class="section-title">Credit Team Recommendation</p>
+                        <p class="section-title">Final Confirmed Credit Details</p>
                         <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
                             <tr>
                                 <td class="label">Comment</td>
-                                <td class="value">{{{approvedOpinion}}}</td>
+                                <td class="value">{{{finalConfirmedDetails.comment}}}</td>
                             </tr>
-                            {{#if approvedCreditDetails.showAdditionalConditions}}
+                            <tr>
+                                <td class="label">Credit Limit</td>
+                                <td class="value">{{finalConfirmedDetails.creditLimit}}</td>
+                            </tr>
+                            <tr>
+                                <td class="label">Credit Term</td>
+                                <td class="value">{{finalConfirmedDetails.creditTerm}}</td>
+                            </tr>
+                            <tr>
+                                <td class="label">Credit Rating</td>
+                                <td class="value">{{finalConfirmedDetails.creditRating}}</td>
+                            </tr>
                             <tr>
                                 <td class="label">Clear outstanding balance</td>
-                                <td class="value">{{#if approvedCreditDetails.clearOutstandingBalanceYes}}<span
+                                <td class="value">{{#if finalConfirmedDetails.clearOutstandingBalanceYes}}<span
                                         class="status-yes">&#10003;</span>{{else}}<span
-                                        class="status-no">&#10007;</span>{{/if}}</td>
+                                        class="status-no">&#10007;</span>{{/if}}
+                                </td>
                             </tr>
                             <tr>
                                 <td class="label">Limit credit used to not exceed approved</td>
-                                <td class="value">{{#if approvedCreditDetails.withinApprovedLimitYes}}<span
+                                <td class="value">{{#if finalConfirmedDetails.withinApprovedLimitYes}}<span
                                         class="status-yes">&#10003;</span>{{else}}<span
-                                        class="status-no">&#10007;</span>{{/if}}</td>
+                                        class="status-no">&#10007;</span>{{/if}}
+                                </td>
                             </tr>
                             <tr>
                                 <td class="label">Bank guarantee</td>
-                                <td class="value">{{approvedCreditDetails.bankGuaranteeAmount}}</td>
+                                <td class="value">{{finalConfirmedDetails.bankGuaranteeAmount}}</td>
                             </tr>
                             <tr>
                                 <td class="label">Cash deposit</td>
-                                <td class="value">{{approvedCreditDetails.cashDepositAmount}}</td>
+                                <td class="value">{{finalConfirmedDetails.cashDepositAmount}}</td>
                             </tr>
-                            {{/if}}
                             <tr>
                                 <td class="label">Temporary Adjustment</td>
                                 <td class="value">{{#if
-                                    approvedCreditDetails.temporaryYes}}{{approvedCreditDetails.validFrom}} -
-                                    {{approvedCreditDetails.validTo}}{{else}}-{{/if}}</td>
+                                    finalConfirmedDetails.temporaryYes}}{{finalConfirmedDetails.validFrom}} -
+                                    {{finalConfirmedDetails.validTo}}{{else}}-{{/if}}</td>
                             </tr>
                             <tr>
                                 <td class="label">Permanent Adjustment</td>
                                 <td class="value">{{#if
-                                    approvedCreditDetails.permanentYes}}{{approvedCreditDetails.validFrom}}{{else}}-{{/if}}
+                                    finalConfirmedDetails.permanentYes}}{{finalConfirmedDetails.validFrom}}{{else}}-{{/if}}
                                 </td>
                             </tr>
                         </table>
-
-                        <p class="section-title">Summary All Steps</p>
-                        {{#if creditDetailsSummary.length}}
-                        <table class="credit-detail-table" role="presentation" width="100%" cellspacing="0"
-                            cellpadding="0">
-                            <tr>
-                                <th>No</th>
-                                <th>Step</th>
-                                <th>By</th>
-                                <th>Status</th>
-                            </tr>
-                            {{#each creditDetailsSummary}}
-                            <tr{{#if isCurrentStep}} class="current-step-row" {{else}}{{#if isLastActionedStep}}
-                                class="last-actioned-row" {{/if}}{{/if}}>
-                                <td>{{step}}</td>
-                                <td>{{stepName}}</td>
-                                <td>{{approver}}</td>
-                                <td>{{status}}</td>
-                </tr>
-                {{/each}}
-            </table>
-            {{else}}
-            <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                <tr>
-                    <td class="value">No approval steps are available.</td>
-                </tr>
-            </table>
-            {{/if}}
-
-            {{#unless hideLastActionedDetails}}
-            <p class="section-title">Latest Approval Action by {{lastActionedStep.approver}}</p>
-            <table class="info-table" role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                <tr>
-                    <td class="label">Comment</td>
-                    <td class="value">{{{lastActionedStep.comment}}}</td>
-                </tr>
-                <tr>
-                    <td class="label">Credit Limit</td>
-                    <td class="value">{{lastActionedStep.creditLimit}}</td>
-                </tr>
-                <tr>
-                    <td class="label">Credit Term</td>
-                    <td class="value">{{lastActionedStep.creditTerm}}</td>
-                </tr>
-                <tr>
-                    <td class="label">Credit Rating</td>
-                    <td class="value">{{lastActionedStep.creditRating}}</td>
-                </tr>
-                <tr>
-                    <td class="label">Clear outstanding balance</td>
-                    <td class="value">{{#if lastActionedStep.clearOutstandingBalanceYes}}<span
-                            class="status-yes">&#10003;</span>{{else}}<span class="status-no">&#10007;</span>{{/if}}
+                        <p style="margin: 26px 0 4px;">You can access to this request by following
+                            <a href="{{link}}" target="_blank" style="color: #009a49; font-weight: bold;">
+                                Link
+                            </a>
+                        </p>
                     </td>
                 </tr>
-                <tr>
-                    <td class="label">Limit credit used to not exceed approved</td>
-                    <td class="value">{{#if lastActionedStep.withinApprovedLimitYes}}<span
-                            class="status-yes">&#10003;</span>{{else}}<span class="status-no">&#10007;</span>{{/if}}
+                <tr class="email-footer">
+                    <td>This is an automated notification from e-Credit System.</td>
+                </tr>
+                {{#if showEmailDebugInfo}}
+                <tr class="email-debug-footer">
+                    <td>
+                        <strong>Show for testing only.</strong><br>
+                        <strong>Subject:</strong> {{emailDebugInfo.subject}}<br>
+                        <strong>To:</strong> {{#each emailDebugInfo.to}}{{#unless @first}},
+                        {{/unless}}{{this}}{{else}}-{{/each}}<br>
+                        <strong>CC:</strong> {{#each emailDebugInfo.cc}}{{#unless @first}},
+                        {{/unless}}{{this}}{{else}}-{{/each}}
                     </td>
                 </tr>
-                <tr>
-                    <td class="label">Bank guarantee</td>
-                    <td class="value">{{lastActionedStep.bankGuaranteeAmount}}</td>
-                </tr>
-                <tr>
-                    <td class="label">Cash deposit</td>
-                    <td class="value">{{lastActionedStep.cashDepositAmount}}</td>
-                </tr>
-                <tr>
-                    <td class="label">Temporary Adjustment</td>
-                    <td class="value">{{#if lastActionedStep.temporaryYes}}{{lastActionedStep.validFrom}} -
-                        {{lastActionedStep.validTo}}{{else}}-{{/if}}</td>
-                </tr>
-                <tr>
-                    <td class="label">Permanent Adjustment</td>
-                    <td class="value">{{#if
-                        lastActionedStep.permanentYes}}{{lastActionedStep.validFrom}}{{else}}-{{/if}}</td>
-                </tr>
+                {{/if}}
             </table>
-            {{/unless}}
-            <p style="margin: 26px 0 4px;">You can access to this request by following 
-                <a href="{{link}}" target="_blank" style="color: #007a3d; font-weight: bold;">
-                    Link
-                </a>
-            </p>
         </td>
     </tr>
-    <tr class="email-footer">
-        <td>This is an automated notification from e-Credit System.</td>
-    </tr>
-    {{#if showEmailDebugInfo}}
-    <tr class="email-debug-footer">
-        <td>
-            <strong>Show for testing only.</strong><br>
-            <strong>Subject:</strong> {{emailDebugInfo.subject}}<br>
-            <strong>To:</strong> {{#each emailDebugInfo.to}}{{#unless @first}},
-            {{/unless}}{{this}}{{else}}-{{/each}}<br>
-            <strong>CC:</strong> {{#each emailDebugInfo.cc}}{{#unless @first}}, {{/unless}}{{this}}{{else}}-{{/each}}
-        </td>
-    </tr>
-    {{/if}}
-</table>
-</td>
-</tr>
 </table>

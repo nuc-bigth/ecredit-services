@@ -96,7 +96,7 @@ async function cancelRequest(req, res, next) {
       throw error;
     }
 
-    const cancelled = await requestService.cancelRequest(req.params.id, updatedBy);
+    const cancelled = await requestService.cancelRequest(req.params.id, updatedBy, req.body?.cancelledNotes);
 
     if (!cancelled) {
       const error = new Error(`Request ${req.params.id} was not found.`);

@@ -148,6 +148,14 @@ describe('requestEmailModelService', () => {
       proposedTerm: { NAME: 'S045 - 45 days from month of supply' },
       existingRating: { NAME: 'B (High)' },
       proposedRating: { NAME: 'B (Medium)' },
+      APPROVED_NOTES: 'Final confirmed note',
+      APPROVED_LIMIT_AMOUNT: 275000,
+      APPROVED_VALID_FROM: '2026-09-01',
+      APPROVED_VALID_TO: '2026-12-31',
+      IS_TEMPORARY_APPROVED: true,
+      IS_PERMANENT_APPROVED: false,
+      approvedTerm: { NAME: 'C060 - 60 days from invoice date' },
+      approvedRating: { NAME: 'A (Low Risk)' },
     }, '-', [
       { APPROVER_TYPE_NAME: 'Requester', APPROVAL_TYPE_NAME: 'Requested', APPROVER_NAME: 'BAE', SORTING: 1, CURRENT_CYCLE: true },
       { APPROVER_TYPE_NAME: 'Credit Team', APPROVAL_TYPE_NAME: 'Suggested', APPROVER_NAME: 'NUT', SORTING: 2, CURRENT_CYCLE: true, CREDIT_LIMIT: 250000, CREDIT_TERM: 'S045', CREDIT_RATING: 'B' },
@@ -183,6 +191,16 @@ describe('requestEmailModelService', () => {
       approver: 'NUT',
       clearOutstandingBalanceYes: false,
     }));
+    expect(model.finalConfirmedDetails).toEqual(expect.objectContaining({
+      comment: 'Final confirmed note',
+      creditLimit: '275,000.00',
+      creditTerm: 'C060 - 60 days from invoice date',
+      creditRating: 'A (Low Risk)',
+      temporaryYes: true,
+      permanentYes: false,
+      validFrom: '01/09/2026',
+      validTo: '31/12/2026',
+    }));
     expect(model.hideLastActionedDetails).toBe(false);
   });
 
@@ -195,6 +213,18 @@ describe('requestEmailModelService', () => {
 
     expect(model.lastActionedStep).toEqual(expect.objectContaining({ approverType: 'BDS Review' }));
     expect(model.hideLastActionedDetails).toBe(true);
+  });
+
+  test('uses the last approved movement for the Final email without changing the shared last action', () => {
+    const model = mapRequestToEmailModel({}, '-', [
+      { APPROVER_TYPE_NAME: 'Requester', APPROVAL_TYPE_NAME: 'Requested', APPROVER_NAME: 'BAE', SORTING: 1, CURRENT_CYCLE: true },
+      { APPROVER_TYPE_NAME: 'Credit Team', APPROVAL_TYPE_NAME: 'Suggested', APPROVER_NAME: 'NUT', SORTING: 2, CURRENT_CYCLE: true },
+      { APPROVER_TYPE_NAME: 'Section Manager Approve (Finance)', APPROVAL_TYPE_NAME: 'Approved', APPROVER_NAME: 'WI-WARINNEREEW', SORTING: 3, CURRENT_CYCLE: true },
+      { APPROVER_TYPE_NAME: 'Manager Approve (Commercial)', APPROVAL_TYPE_NAME: 'Approved', APPROVER_NAME: 'NJ-NARONGRIT', SORTING: 4, CURRENT_CYCLE: true },
+    ]);
+
+    expect(model.lastActionedStep).toEqual(expect.objectContaining({ approver: 'WI-WARINNEREEW' }));
+    expect(model.finalActionedStep).toEqual(expect.objectContaining({ approver: 'NJ-NARONGRIT' }));
   });
 
   test('keeps last-action details when the last actioned step was not BDS Review', () => {

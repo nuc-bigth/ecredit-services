@@ -156,7 +156,19 @@ describe('requestService.processApprovalAction', () => {
     expect(approvalUpdate.mock.calls[0][0].APPROVAL_TYPE_ID).toBe('approved-type');
     expect(database.query.mock.calls[1][1].replacements).toEqual({ approvalTypeName: 'Approved' });
     expect(requestUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ STATUS_ID: finalStatusId }),
+      expect.objectContaining({
+        STATUS_ID: finalStatusId,
+        APPROVED_LIMIT_AMOUNT: 100000,
+        APPROVED_TERM_ID: 'term-1',
+        IS_LIMIT_APPROVED: true,
+        IS_TERM_APPROVED: true,
+        APPROVED_RATING_ID: 'rating-1',
+        APPROVED_VALID_FROM: { fn: 'DATEFROMPARTS' },
+        APPROVED_VALID_TO: { fn: 'DATEFROMPARTS' },
+        APPROVED_NOTES: 'Reviewed',
+        IS_PERMANENT_APPROVED: false,
+        IS_TEMPORARY_APPROVED: true,
+      }),
       expect.objectContaining({ where: { ID: requestId, ENABLED: true }, transaction }),
     );
     expect(database.query.mock.calls[2][0]).toContain('TRY_CONVERT(BIGINT, APPROVER_ID)');
@@ -410,21 +422,34 @@ describe('requestService.submitRequest', () => {
     });
   });
 
-  it('rejects an empty submit step list before opening a transaction', async () => {
-    await expect(requestService.submitRequest(requestId, submitCommand([]), updatedBy))
-      .rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
-    expect(getDatabase().transaction).not.toHaveBeenCalled();
+  it('accepts an empty submit step list for direct completion', async () => {
+    await requestService.submitRequest(requestId, submitCommand([]), updatedBy);
+    expect(requestRecord.update).toHaveBeenCalledWith(
+      expect.objectContaining({ STATUS_ID: completedStatusId }),
+      { transaction },
+    );
+    expect(transaction.commit).toHaveBeenCalledTimes(1);
   });
 
-  it('requires approval steps when only a suggested rating is included', async () => {
+  it('completes without approval steps when no approvers are selected', async () => {
     const command = submitCommand([]);
     command.requestedDetails.IS_TERM_REQUESTED = false;
     command.requestedDetails.IS_LIMIT_REQUESTED = false;
-    command.creditSuggestion.PROPOSED_RATING_ID = 'rating-1';
+    command.creditSuggestion = {
+      ...command.creditSuggestion,
+      PROPOSED_LIMIT_AMOUNT: 0,
+      PROPOSED_RATING_ID: 'rating-1',
+    };
 
-    await expect(requestService.submitRequest(requestId, command, updatedBy))
-      .rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
-    expect(getDatabase().transaction).not.toHaveBeenCalled();
+    await requestService.submitRequest(requestId, command, updatedBy);
+    expect(requestRecord.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        STATUS_ID: completedStatusId,
+        APPROVED_RATING_ID: 'rating-1',
+      }),
+      { transaction },
+    );
+    expect(transaction.commit).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a submit step without an approver before opening a transaction', async () => {
@@ -449,6 +474,16 @@ describe('requestService.submitRequest', () => {
     const command = submitCommand([]);
     command.requestedDetails.IS_TERM_REQUESTED = false;
     command.requestedDetails.IS_LIMIT_REQUESTED = false;
+    command.creditSuggestion = {
+      ...command.creditSuggestion,
+      PROPOSED_TERM_ID: 'term-1',
+      PROPOSED_RATING_ID: 'rating-1',
+      PROPOSED_NOTES: 'Completed without approval',
+      IS_PERMANENT_PROPOSED: false,
+      IS_TEMPORARY_PROPOSED: true,
+      PROPOSED_VALID_FROM: '2026-09-14',
+      PROPOSED_VALID_TO: '2026-09-30',
+    };
     await requestService.submitRequest(requestId, command, updatedBy);
 
     expect(requestRecord.update).toHaveBeenCalledWith(
@@ -456,6 +491,18 @@ describe('requestService.submitRequest', () => {
         STATUS_ID: '407e23f9-caf5-4c4a-801d-598cf437d1ae',
         IS_TERM_REQUESTED: false,
         IS_LIMIT_REQUESTED: false,
+        IS_TERM_PROPOSED: true,
+        IS_LIMIT_PROPOSED: true,
+        APPROVED_LIMIT_AMOUNT: 100000,
+        APPROVED_TERM_ID: 'term-1',
+        APPROVED_RATING_ID: 'rating-1',
+        IS_LIMIT_APPROVED: true,
+        IS_TERM_APPROVED: true,
+        APPROVED_VALID_FROM: { fn: 'DATEFROMPARTS' },
+        APPROVED_VALID_TO: { fn: 'DATEFROMPARTS' },
+        APPROVED_NOTES: 'Completed without approval',
+        IS_PERMANENT_APPROVED: false,
+        IS_TEMPORARY_APPROVED: true,
         SUBMITTED_BY: updatedBy,
       }),
       { transaction },
@@ -524,7 +571,11 @@ describe('requestService.submitRequest', () => {
     }]);
     command.requestedDetails.IS_TERM_REQUESTED = false;
     command.requestedDetails.IS_LIMIT_REQUESTED = false;
-    command.creditSuggestion.PROPOSED_RATING_ID = 'rating-1';
+    command.creditSuggestion = {
+      ...command.creditSuggestion,
+      PROPOSED_LIMIT_AMOUNT: 0,
+      PROPOSED_RATING_ID: 'rating-1',
+    };
     database.query
       .mockResolvedValueOnce([{ ID: 'type-1' }])
       .mockResolvedValueOnce([{ EMP_CODE: 456 }])
@@ -538,6 +589,8 @@ describe('requestService.submitRequest', () => {
         STATUS_ID: '4ba2cdc6-47aa-41bd-99a0-79e1e6b0831b',
         IS_TERM_REQUESTED: false,
         IS_LIMIT_REQUESTED: false,
+        IS_TERM_PROPOSED: false,
+        IS_LIMIT_PROPOSED: false,
       }),
       { transaction },
     );
