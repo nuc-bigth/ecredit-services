@@ -143,8 +143,11 @@ async function listEmailLogs(requestId, query = {}) {
     { CATEGORY: { [Op.like]: `%${String(query.search).slice(0, 100)}%` } },
   ];
   const { Employee } = getModels();
-  const result = await Email.findAndCountAll({ where, include: [{ model: Employee, as: 'updatedByEmployee', attributes: ['INITIALS', 'USERNAME'], required: false }], order: [['CREATED_DATE', 'DESC']], limit: pageSize, offset: (page - 1) * pageSize });
-  return { items: result.rows.map(toEmailSummary), pagination: { page, pageSize, totalItems: result.count, totalPages: Math.ceil(result.count / pageSize) } };
+  const [rows, totalItems] = await Promise.all([
+    Email.findAll({ where, include: [{ model: Employee, as: 'updatedByEmployee', attributes: ['INITIALS', 'USERNAME'], required: false }], order: [['CREATED_DATE', 'DESC']], limit: pageSize, offset: (page - 1) * pageSize }),
+    Email.count({ where }),
+  ]);
+  return { items: rows.map(toEmailSummary), pagination: { page, pageSize, totalItems, totalPages: Math.ceil(totalItems / pageSize) } };
 }
 
 async function getEmailLog(requestId, emailId) {

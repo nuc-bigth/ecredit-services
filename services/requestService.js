@@ -3,6 +3,7 @@ const { randomUUID } = require('crypto');
 const { getModels } = require('../models');
 const { getDatabase } = require('../config/database');
 const attachmentService = require('./attachmentService');
+const customerLogService = require('./customerLogService');
 
 const QUICK_FILTERS = new Set(['rating', 'limit', 'term']);
 const DRAFT_STATUS_ID = 'db8b3768-8466-4974-8dff-4c374b16a639';
@@ -828,7 +829,7 @@ async function submitRequest(id, command, updatedBy) {
       });
     }
     await request.update(requestUpdate, { transaction });
-    await syncCustomerFromRequest(request, updatedBy, transaction);
+    await syncCustomerFromRequest(request, updatedBy, transaction, 'all-requests.details.submit', id);
 
     for (const step of normalizedSteps) {
       await database.query(
@@ -993,7 +994,7 @@ async function updateRequestCustomerInfo(id, payload, updatedBy) {
       { ...update, UPDATED_DATE: Request.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy },
       { transaction },
     );
-    await syncCustomerFromRequest(request, updatedBy, transaction);
+    await syncCustomerFromRequest(request, updatedBy, transaction, 'all-requests.details.customer-save', id);
     await transaction.commit();
   } catch (error) {
     if (!transaction.finished) await transaction.rollback();
@@ -1002,7 +1003,7 @@ async function updateRequestCustomerInfo(id, payload, updatedBy) {
   return getRequestById(id);
 }
 
-async function syncCustomerFromRequest(request, updatedBy, transaction) {
+async function syncCustomerFromRequest(request, updatedBy, transaction, source, requestId) {
   const taxNo = typeof request.CUSTOMER_TAX_NO === 'string' ? request.CUSTOMER_TAX_NO.trim() : '';
   if (!/^\d{13}$/.test(taxNo)) return;
 
@@ -1027,16 +1028,40 @@ async function syncCustomerFromRequest(request, updatedBy, transaction) {
   });
 
   if (customer) {
+    const before = customer.get ? customer.get({ plain: true }) : { ...customer };
     await customer.update(customerValues, { transaction });
+    await customerLogService.recordCustomerMutation({
+      customerId: customer.ID,
+      taxNo,
+      action: 'update',
+      source,
+      requestId,
+      actorId: updatedBy,
+      before,
+      after: { ...before, ...customerValues },
+      transaction,
+    });
     return;
   }
 
-  await Customer.create({
+  const newCustomerValues = {
     ID: randomUUID(),
     TAX_NO: taxNo,
     ...customerValues,
     ENABLED: '1',
-  }, { transaction });
+  };
+  const createdCustomer = await Customer.create(newCustomerValues, { transaction });
+  await customerLogService.recordCustomerMutation({
+    customerId: newCustomerValues.ID,
+    taxNo,
+    action: 'insert',
+    source,
+    requestId,
+    actorId: updatedBy,
+    before: null,
+    after: createdCustomer || newCustomerValues,
+    transaction,
+  });
 }
 
 function normalizeCreditSuggestionId(value, field) {

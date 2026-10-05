@@ -391,6 +391,7 @@ describe('requestService.submitRequest', () => {
   let requestRecord;
   let transaction;
   let Customer;
+  let CustomerLog;
 
   beforeEach(() => {
     transaction = {
@@ -412,6 +413,10 @@ describe('requestService.submitRequest', () => {
       create: jest.fn().mockResolvedValue(undefined),
       sequelize,
     };
+    CustomerLog = {
+      create: jest.fn().mockResolvedValue(undefined),
+      sequelize,
+    };
     const Request = {
       findOne: jest.fn()
         .mockResolvedValueOnce(requestRecord)
@@ -423,6 +428,7 @@ describe('requestService.submitRequest', () => {
     getModels.mockReturnValue({
       Request,
       Customer,
+      CustomerLog,
       Size: { findOne: jest.fn().mockResolvedValue({ ID: 'size-1' }) },
       Term: { findByPk: jest.fn().mockResolvedValue({ ID: 'term-1' }) },
       Rating: { findOne: jest.fn().mockResolvedValue({ ID: 'rating-1' }) },
@@ -457,6 +463,7 @@ describe('requestService.submitRequest', () => {
       getDatabase.mockReturnValue({ transaction: jest.fn().mockResolvedValue(transaction) });
       getModels.mockReturnValue({
         Customer,
+        CustomerLog,
         Request,
         Size: { findOne: jest.fn().mockResolvedValue({ ID: 'size-1' }) },
       });
@@ -482,6 +489,25 @@ describe('requestService.submitRequest', () => {
         }),
         { transaction },
       );
+      expect(CustomerLog.create).toHaveBeenCalledWith(expect.objectContaining({
+        ID: expect.any(String),
+        TAX_NO: '1234567890123',
+        NAME: 'Customer created',
+        LOG_TYPE_ID: expect.any(String),
+        CUSTOMER_ID: expect.any(String),
+        CATEGORY: 'customer.insert',
+        CREATED_BY: updatedBy,
+        UPDATED_BY: updatedBy,
+        ENABLED: true,
+      }), { transaction });
+      expect(JSON.parse(CustomerLog.create.mock.calls[0][0].DESCRIPTION)).toMatchObject({
+        operation: 'upsert',
+        action: 'insert',
+        source: 'all-requests.details.customer-save',
+        requestId,
+        customerId: expect.any(String),
+        values: { REGISTERED_CAPITAL_AMOUNT: '1000000' },
+      });
       expect(transaction.commit).toHaveBeenCalledTimes(1);
       expect(transaction.rollback).not.toHaveBeenCalled();
     });
@@ -537,10 +563,35 @@ describe('requestService.submitRequest', () => {
       }),
       { transaction },
     );
+    expect(CustomerLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      ID: expect.any(String),
+      TAX_NO: '1234567890123',
+      NAME: 'Customer created',
+      LOG_TYPE_ID: expect.any(String),
+      CUSTOMER_ID: expect.any(String),
+      CATEGORY: 'customer.insert',
+      CREATED_BY: updatedBy,
+      UPDATED_BY: updatedBy,
+      ENABLED: true,
+    }), { transaction });
+    expect(JSON.parse(CustomerLog.create.mock.calls[0][0].DESCRIPTION)).toMatchObject({
+      operation: 'upsert',
+      action: 'insert',
+      source: 'all-requests.details.submit',
+      requestId,
+      customerId: expect.any(String),
+      values: { REGISTERED_CAPITAL_AMOUNT: '1000000' },
+    });
   });
 
   it('updates an enabled customer when the tax number already exists', async () => {
-    const customerRecord = { update: jest.fn().mockResolvedValue(undefined) };
+    const customerRecord = {
+      ID: 'customer-1',
+      TAX_NO: '1234567890123',
+      ENABLED: '1',
+      REGISTERED_CAPITAL_AMOUNT: '1000000',
+      update: jest.fn().mockResolvedValue(undefined),
+    };
     Customer.findOne.mockResolvedValue(customerRecord);
     Object.assign(requestRecord, {
       CUSTOMER_TAX_NO: '1234567890123',
@@ -559,6 +610,21 @@ describe('requestService.submitRequest', () => {
       }),
       { transaction },
     );
+    expect(CustomerLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      ID: expect.any(String),
+      TAX_NO: '1234567890123',
+      NAME: 'Customer updated',
+      LOG_TYPE_ID: expect.any(String),
+      CUSTOMER_ID: 'customer-1',
+      CATEGORY: 'customer.update',
+      CREATED_BY: updatedBy,
+      UPDATED_BY: updatedBy,
+      ENABLED: true,
+    }), { transaction });
+    expect(JSON.parse(CustomerLog.create.mock.calls[0][0].DESCRIPTION)).toMatchObject({
+      action: 'update',
+      values: { REGISTERED_CAPITAL_AMOUNT: '2500000' },
+    });
   });
 
   it('completes without approval steps when no approvers are selected', async () => {

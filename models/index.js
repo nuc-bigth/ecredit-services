@@ -14,6 +14,7 @@ const defineRolePermission = require('./rolePermission');
 const defineUserPermission = require('./userPermission');
 const defineAttachment = require('./attachment');
 const defineLog = require('./log');
+const defineCustomerLog = require('./customerLog');
 const defineLogType = require('./logType');
 const defineApproval = require('./approval');
 const defineEmail = require('./email');
@@ -42,6 +43,7 @@ function initModels(sequelize) {
   const UserPermission = defineUserPermission(sequelize);
   const Attachment = defineAttachment(sequelize);
   const Log = defineLog(sequelize);
+  const CustomerLog = defineCustomerLog(sequelize);
   const LogType = defineLogType(sequelize);
   const Approval = defineApproval(sequelize);
   const Email = defineEmail(sequelize);
@@ -84,6 +86,8 @@ function initModels(sequelize) {
   Customer.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
 
   Log.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
+  CustomerLog.belongsTo(Employee, { as: 'createdByEmployee', foreignKey: 'CREATED_BY', targetKey: 'EMP_CODE' });
+  CustomerLog.belongsTo(LogType, { as: 'logType', foreignKey: 'LOG_TYPE_ID', targetKey: 'ID' });
   Email.belongsTo(Employee, { as: 'updatedByEmployee', foreignKey: 'UPDATED_BY', targetKey: 'EMP_CODE' });
 
   // ROLE_PERMISSIONS: Role <-> Permission grants
@@ -111,6 +115,7 @@ function initModels(sequelize) {
     UserPermission,
     Attachment,
     Log,
+    CustomerLog,
     LogType,
     Approval,
     Email,

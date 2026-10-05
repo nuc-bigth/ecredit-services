@@ -1,5 +1,6 @@
 const { Op, fn, col, where, literal } = require('sequelize');
 const { getModels } = require('../models');
+const customerLogService = require('./customerLogService');
 
 const QUICK_FILTER_SIZE_IDS = {
   S: 'd8ce72cf-0228-4293-9699-311eeecb926d',
@@ -359,16 +360,49 @@ async function updateCustomer(id, payload, updatedBy) {
     if (!size) throw validationError('SIZE_ID must reference an enabled size.');
   }
 
-  // Let SQL Server build the datetime values; Sequelize's JS Date strings carry a timezone offset that datetime rejects.
-  if (typeof update.REGISTERED_DATE === 'string') {
-    const [year, month, day] = update.REGISTERED_DATE.split('-').map(Number);
-    update.REGISTERED_DATE = Customer.sequelize.fn('DATEFROMPARTS', year, month, day);
+  const auditUpdate = { ...update };
+  const transaction = await Customer.sequelize.transaction();
+  let affectedRows = 0;
+  try {
+    const current = await Customer.findOne({
+      where: { ID: id, ENABLED: '1' },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!current) {
+      await transaction.commit();
+      return null;
+    }
+
+    // Let SQL Server build the datetime values; Sequelize's JS Date strings carry a timezone offset that datetime rejects.
+    if (typeof update.REGISTERED_DATE === 'string') {
+      const [year, month, day] = update.REGISTERED_DATE.split('-').map(Number);
+      update.REGISTERED_DATE = Customer.sequelize.fn('DATEFROMPARTS', year, month, day);
+    }
+
+    [affectedRows] = await Customer.update(
+      { ...update, UPDATED_DATE: Customer.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy },
+      { where: { ID: id, ENABLED: '1' }, transaction },
+    );
+    if (affectedRows) {
+      const before = current.get ? current.get({ plain: true }) : { ...current };
+      await customerLogService.recordCustomerMutation({
+        customerId: id,
+        taxNo: auditUpdate.TAX_NO || before.TAX_NO,
+        action: 'update',
+        source: 'customer-extensions.details.save',
+        actorId: updatedBy,
+        before,
+        after: { ...before, ...auditUpdate },
+        transaction,
+      });
+    }
+    await transaction.commit();
+  } catch (error) {
+    if (!transaction.finished) await transaction.rollback();
+    throw error;
   }
 
-  const [affectedRows] = await Customer.update(
-    { ...update, UPDATED_DATE: Customer.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy },
-    { where: { ID: id, ENABLED: '1' } },
-  );
   return affectedRows ? getCustomerById(id) : null;
 }
 
@@ -381,15 +415,47 @@ async function softDeleteCustomer(id, descriptions, updatedBy) {
   }
 
   const { Customer } = getModels();
-  const [affectedRows] = await Customer.update(
-    {
+  const transaction = await Customer.sequelize.transaction();
+  let affectedRows = 0;
+  try {
+    const current = await Customer.findOne({
+      where: { ID: id, ENABLED: '1' },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!current) {
+      await transaction.commit();
+      return false;
+    }
+
+    const before = current.get ? current.get({ plain: true }) : { ...current };
+    const deletedValues = {
       ENABLED: '0',
       DESCRIPTION: descriptions.trim(),
       UPDATED_DATE: Customer.sequelize.fn('GETDATE'),
       UPDATED_BY: updatedBy,
-    },
-    { where: { ID: id, ENABLED: '1' } },
-  );
+    };
+    [affectedRows] = await Customer.update(
+      deletedValues,
+      { where: { ID: id, ENABLED: '1' }, transaction },
+    );
+    if (affectedRows) {
+      await customerLogService.recordCustomerMutation({
+        customerId: id,
+        taxNo: before.TAX_NO,
+        action: 'delete',
+        source: 'customer-extensions.details.delete',
+        actorId: updatedBy,
+        before,
+        after: { ...before, ENABLED: '0', DESCRIPTION: descriptions.trim() },
+        transaction,
+      });
+    }
+    await transaction.commit();
+  } catch (error) {
+    if (!transaction.finished) await transaction.rollback();
+    throw error;
+  }
 
   return affectedRows > 0;
 }

@@ -3,7 +3,7 @@
 jest.mock('../models', () => ({ getModels: jest.fn() }));
 
 const { getModels } = require('../models');
-const { buildDescription, parseDescription, sanitizeValue, createEmailLog, updateEmailLog } = require('../services/emailLogService');
+const { buildDescription, parseDescription, sanitizeValue, createEmailLog, updateEmailLog, listEmailLogs } = require('../services/emailLogService');
 
 describe('emailLogService', () => {
   beforeEach(() => {
@@ -81,5 +81,29 @@ describe('emailLogService', () => {
     const sanitized = sanitizeValue(model);
     expect(sanitized.body.content).toContain('base64 omitted');
     expect(model.body.content).toHaveLength(600);
+  });
+
+  test('loads email logs and counts them without the employee join', async () => {
+    const rows = [];
+    const Email = {
+      findAll: jest.fn().mockResolvedValue(rows),
+      count: jest.fn().mockResolvedValue(21),
+    };
+    const Employee = {};
+    getModels.mockReturnValue({ Email, Employee });
+
+    const result = await listEmailLogs('request-1', { page: '2', pageSize: '10' });
+
+    expect(Email.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      where: { REQUEST_ID: 'request-1', ENABLED: true },
+      limit: 10,
+      offset: 10,
+      include: [{ model: Employee, as: 'updatedByEmployee', attributes: ['INITIALS', 'USERNAME'], required: false }],
+    }));
+    expect(Email.count).toHaveBeenCalledWith({ where: { REQUEST_ID: 'request-1', ENABLED: true } });
+    expect(result).toEqual({
+      items: [],
+      pagination: { page: 2, pageSize: 10, totalItems: 21, totalPages: 3 },
+    });
   });
 });
