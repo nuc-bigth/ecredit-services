@@ -390,6 +390,7 @@ describe('requestService.submitRequest', () => {
   let database;
   let requestRecord;
   let transaction;
+  let Customer;
 
   beforeEach(() => {
     transaction = {
@@ -406,6 +407,11 @@ describe('requestService.submitRequest', () => {
       update: jest.fn().mockResolvedValue(undefined),
     };
     const sequelize = { fn: jest.fn((name) => ({ fn: name })) };
+    Customer = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue(undefined),
+      sequelize,
+    };
     const Request = {
       findOne: jest.fn()
         .mockResolvedValueOnce(requestRecord)
@@ -416,9 +422,68 @@ describe('requestService.submitRequest', () => {
     getDatabase.mockReturnValue(database);
     getModels.mockReturnValue({
       Request,
+      Customer,
       Size: { findOne: jest.fn().mockResolvedValue({ ID: 'size-1' }) },
       Term: { findByPk: jest.fn().mockResolvedValue({ ID: 'term-1' }) },
       Rating: { findOne: jest.fn().mockResolvedValue({ ID: 'rating-1' }) },
+    });
+  });
+
+  describe('requestService.updateRequestCustomerInfo', () => {
+    it('creates a customer from the saved request when the tax number has 13 digits', async () => {
+      const transaction = {
+        LOCK: { UPDATE: 'UPDATE' },
+        commit: jest.fn().mockResolvedValue(undefined),
+        rollback: jest.fn().mockResolvedValue(undefined),
+      };
+      const sequelize = { fn: jest.fn((name) => ({ fn: name })) };
+      const requestRecord = {
+        CUSTOMER_TAX_NO: '1234567890123',
+        CUSTOMER_CUSTOMER_TYPE_INTER: 'Internal customer',
+        CUSTOMER_BUSINESS_TYPE_EXTER: 'External business',
+        update: jest.fn(async (values) => Object.assign(requestRecord, values)),
+      };
+      const Customer = {
+        findOne: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue(undefined),
+        sequelize,
+      };
+      const Request = {
+        findOne: jest.fn()
+          .mockResolvedValueOnce(requestRecord)
+          .mockResolvedValueOnce(null),
+        sequelize,
+      };
+      getDatabase.mockReturnValue({ transaction: jest.fn().mockResolvedValue(transaction) });
+      getModels.mockReturnValue({
+        Customer,
+        Request,
+        Size: { findOne: jest.fn().mockResolvedValue({ ID: 'size-1' }) },
+      });
+
+      await requestService.updateRequestCustomerInfo(requestId, {
+        CUSTOMER_TAX_NO: '1234567890123',
+        CUSTOMER_REGISTERED_DATE: '2026-01-02',
+        CUSTOMER_REGISTERED_CAPITAL_AMOUNT: '1000000',
+        CUSTOMER_DIRECTORS: 'Directors',
+      }, updatedBy);
+
+      expect(Customer.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          TAX_NO: '1234567890123',
+          REGISTERED_DATE: { fn: 'DATEFROMPARTS' },
+          REGISTERED_CAPITAL_AMOUNT: '1000000',
+          CUSTOMER_TYPE_INTER: 'Internal customer',
+          BUSINESS_TYPE_EXTER: 'External business',
+          SIZE_ID: requestRecord.CUSTOMER_SIZE_ID,
+          DIRECTORS: 'Directors',
+          UPDATED_BY: String(updatedBy),
+          ENABLED: '1',
+        }),
+        { transaction },
+      );
+      expect(transaction.commit).toHaveBeenCalledTimes(1);
+      expect(transaction.rollback).not.toHaveBeenCalled();
     });
   });
 
@@ -429,6 +494,71 @@ describe('requestService.submitRequest', () => {
       { transaction },
     );
     expect(transaction.commit).toHaveBeenCalledTimes(1);
+    expect(Customer.findOne).not.toHaveBeenCalled();
+    expect(Customer.create).not.toHaveBeenCalled();
+  });
+
+  it('creates an enabled customer from request data when submitting with a 13-digit tax number', async () => {
+    Object.assign(requestRecord, {
+      CUSTOMER_TAX_NO: '1234567890123',
+      CUSTOMER_REGISTERED_DATE: '2020-01-02',
+      CUSTOMER_REGISTERED_CAPITAL_AMOUNT: '1000000',
+      CUSTOMER_BUSINESS_TYPE_INTER: 'Internal business',
+      CUSTOMER_CUSTOMER_TYPE_INTER: 'Internal customer',
+      CUSTOMER_BUSINESS_TYPE_EXTER: 'External business',
+      CUSTOMER_CUSTOMER_TYPE_EXTER: 'External customer',
+      CUSTOMER_SIZE_ID: 'size-1',
+      CUSTOMER_SHAREHOLDERS: 'Shareholders',
+      CUSTOMER_DIRECTORS: 'Directors',
+    });
+
+    await requestService.submitRequest(requestId, submitCommand([]), updatedBy);
+
+    expect(Customer.findOne).toHaveBeenCalledWith({
+      where: { ENABLED: '1', TAX_NO: '1234567890123' },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    expect(Customer.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TAX_NO: '1234567890123',
+        REGISTERED_DATE: '2020-01-02',
+        REGISTERED_CAPITAL_AMOUNT: '1000000',
+        BUSINESS_TYPE_INTER: 'Internal business',
+        CUSTOMER_TYPE_INTER: 'Internal customer',
+        BUSINESS_TYPE_EXTER: 'External business',
+        CUSTOMER_TYPE_EXTER: 'External customer',
+        SIZE_ID: 'size-1',
+        SHAREHOLDERS: 'Shareholders',
+        DIRECTORS: 'Directors',
+        UPDATED_BY: String(updatedBy),
+        UPDATED_DATE: { fn: 'GETDATE' },
+        ENABLED: '1',
+      }),
+      { transaction },
+    );
+  });
+
+  it('updates an enabled customer when the tax number already exists', async () => {
+    const customerRecord = { update: jest.fn().mockResolvedValue(undefined) };
+    Customer.findOne.mockResolvedValue(customerRecord);
+    Object.assign(requestRecord, {
+      CUSTOMER_TAX_NO: '1234567890123',
+      CUSTOMER_REGISTERED_CAPITAL_AMOUNT: '2500000',
+      CUSTOMER_SIZE_ID: 'size-2',
+    });
+
+    await requestService.submitRequest(requestId, submitCommand([]), updatedBy);
+
+    expect(Customer.create).not.toHaveBeenCalled();
+    expect(customerRecord.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        REGISTERED_CAPITAL_AMOUNT: '2500000',
+        SIZE_ID: 'size-2',
+        UPDATED_BY: String(updatedBy),
+      }),
+      { transaction },
+    );
   });
 
   it('completes without approval steps when no approvers are selected', async () => {

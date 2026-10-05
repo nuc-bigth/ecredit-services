@@ -18,6 +18,7 @@ module.exports = (sequelize) =>
       CUSTOMER_TYPE_EXTER: DataTypes.STRING,
       SHAREHOLDERS: DataTypes.STRING,
       DIRECTORS: DataTypes.STRING,
+      DESCRIPTION: DataTypes.TEXT,
       UPDATED_BY: DataTypes.STRING,
       UPDATED_DATE: DataTypes.DATE,
       ENABLED: DataTypes.STRING,

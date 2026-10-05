@@ -210,6 +210,7 @@ function formatUpdatedDate(value) {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
+    timeZone: 'UTC',
   }).formatToParts(date);
   const part = (type) => parts.find((entry) => entry.type === type)?.value || '';
 
@@ -371,11 +372,19 @@ async function updateCustomer(id, payload, updatedBy) {
   return affectedRows ? getCustomerById(id) : null;
 }
 
-async function softDeleteCustomer(id, updatedBy) {
+async function softDeleteCustomer(id, descriptions, updatedBy) {
+  if (typeof descriptions !== 'string' || !descriptions.trim()) {
+    throw validationError('DESCRIPTION is required to delete a customer.');
+  }
+  if (descriptions.trim().length > 2048) {
+    throw validationError('DESCRIPTION must not exceed 2048 characters.');
+  }
+
   const { Customer } = getModels();
   const [affectedRows] = await Customer.update(
     {
       ENABLED: '0',
+      DESCRIPTION: descriptions.trim(),
       UPDATED_DATE: Customer.sequelize.fn('GETDATE'),
       UPDATED_BY: updatedBy,
     },

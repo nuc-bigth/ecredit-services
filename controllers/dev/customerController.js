@@ -99,7 +99,7 @@ async function deleteCustomer(req, res, next) {
       throw error;
     }
 
-    const deleted = await customerService.softDeleteCustomer(req.params.id, updatedBy);
+    const deleted = await customerService.softDeleteCustomer(req.params.id, req.body?.DESCRIPTION, updatedBy);
 
     if (!deleted) {
       const error = new Error(`Customer ${req.params.id} was not found.`);

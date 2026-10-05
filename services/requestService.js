@@ -237,6 +237,7 @@ function formatUpdatedDate(value) {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
+    timeZone: 'UTC',
   }).formatToParts(date);
   const part = (type) => parts.find((entry) => entry.type === type)?.value || '';
 
@@ -827,6 +828,7 @@ async function submitRequest(id, command, updatedBy) {
       });
     }
     await request.update(requestUpdate, { transaction });
+    await syncCustomerFromRequest(request, updatedBy, transaction);
 
     for (const step of normalizedSteps) {
       await database.query(
@@ -964,20 +966,77 @@ function normalizeRequestCustomerInfo(payload) {
 async function updateRequestCustomerInfo(id, payload, updatedBy) {
   const { Request, Size } = getModels();
   const update = normalizeRequestCustomerInfo(payload);
-  const request = await Request.findOne({ where: { ID: id, ENABLED: true } });
+  const transaction = await getDatabase().transaction();
+  try {
+    const request = await Request.findOne({
+      where: { ID: id, ENABLED: true },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!request) {
+      await transaction.commit();
+      return null;
+    }
+    if (update.CUSTOMER_SIZE_ID) {
+      const size = await Size.findOne({
+        where: { ID: update.CUSTOMER_SIZE_ID, ENABLED: '1' },
+        transaction,
+      });
+      if (!size) throw validationError('CUSTOMER_SIZE_ID must reference an enabled size.');
+    }
 
-  if (!request) return null;
-  if (update.CUSTOMER_SIZE_ID) {
-    const size = await Size.findOne({ where: { ID: update.CUSTOMER_SIZE_ID, ENABLED: '1' } });
-    if (!size) throw validationError('CUSTOMER_SIZE_ID must reference an enabled size.');
+    if (typeof update.CUSTOMER_REGISTERED_DATE === 'string') {
+      update.CUSTOMER_REGISTERED_DATE = databaseDateFromYmd(Request.sequelize, update.CUSTOMER_REGISTERED_DATE);
+    }
+
+    await request.update(
+      { ...update, UPDATED_DATE: Request.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy },
+      { transaction },
+    );
+    await syncCustomerFromRequest(request, updatedBy, transaction);
+    await transaction.commit();
+  } catch (error) {
+    if (!transaction.finished) await transaction.rollback();
+    throw error;
   }
-
-  if (typeof update.CUSTOMER_REGISTERED_DATE === 'string') {
-    update.CUSTOMER_REGISTERED_DATE = databaseDateFromYmd(Request.sequelize, update.CUSTOMER_REGISTERED_DATE);
-  }
-
-  await request.update({ ...update, UPDATED_DATE: Request.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy });
   return getRequestById(id);
+}
+
+async function syncCustomerFromRequest(request, updatedBy, transaction) {
+  const taxNo = typeof request.CUSTOMER_TAX_NO === 'string' ? request.CUSTOMER_TAX_NO.trim() : '';
+  if (!/^\d{13}$/.test(taxNo)) return;
+
+  const { Customer } = getModels();
+  const customerValues = {
+    REGISTERED_DATE: request.CUSTOMER_REGISTERED_DATE ?? null,
+    REGISTERED_CAPITAL_AMOUNT: request.CUSTOMER_REGISTERED_CAPITAL_AMOUNT ?? null,
+    BUSINESS_TYPE_INTER: request.CUSTOMER_BUSINESS_TYPE_INTER ?? null,
+    CUSTOMER_TYPE_INTER: request.CUSTOMER_CUSTOMER_TYPE_INTER ?? null,
+    BUSINESS_TYPE_EXTER: request.CUSTOMER_BUSINESS_TYPE_EXTER ?? null,
+    CUSTOMER_TYPE_EXTER: request.CUSTOMER_CUSTOMER_TYPE_EXTER ?? null,
+    SIZE_ID: request.CUSTOMER_SIZE_ID ?? null,
+    SHAREHOLDERS: request.CUSTOMER_SHAREHOLDERS ?? null,
+    DIRECTORS: request.CUSTOMER_DIRECTORS ?? null,
+    UPDATED_DATE: Customer.sequelize.fn('GETDATE'),
+    UPDATED_BY: String(updatedBy),
+  };
+  const customer = await Customer.findOne({
+    where: { ENABLED: '1', TAX_NO: taxNo },
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+
+  if (customer) {
+    await customer.update(customerValues, { transaction });
+    return;
+  }
+
+  await Customer.create({
+    ID: randomUUID(),
+    TAX_NO: taxNo,
+    ...customerValues,
+    ENABLED: '1',
+  }, { transaction });
 }
 
 function normalizeCreditSuggestionId(value, field) {
