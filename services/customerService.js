@@ -18,6 +18,9 @@ const SORT_FIELDS = {
 const TEXT_FILTERS = {
   TAX_NO: 'TAX_NO',
   BUSINESS_TYPE: 'BUSINESS_TYPE_INTER',
+  CUSTOMER_TYPE: 'CUSTOMER_TYPE_EXTER',
+  DIRECTORS: 'DIRECTORS',
+  SHAREHOLDERS: 'SHAREHOLDERS',
 };
 
 // Mirrors the OUTER APPLY: shortest, then alphabetically-first S_CUSTOMER name for the same tax id.
@@ -27,6 +30,21 @@ const CUSTOMER_NAME_SUBQUERY = `(
   WHERE SC.TAX_NO = Customer.TAX_NO
   ORDER BY LEN(SC.CUST_NAME_ENG) ASC, SC.CUST_NAME_ENG ASC
 )`;
+
+const LATEST_REQUEST_FIELD = (field) => `(
+  SELECT TOP (1) R.${field}
+  FROM REQUESTS R
+  WHERE R.CUSTOMER_TAX_NO = Customer.TAX_NO
+  ORDER BY R.UPDATED_DATE DESC, R.CREATED_DATE DESC
+)`;
+
+function salesGroupName(code) {
+  return ({
+    100: '100 - TGEE',
+    200: '200 - MG',
+    300: '300 - PG',
+  })[code] || (code ? String(code) : '');
+}
 
 function normalizePage(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -128,7 +146,14 @@ function buildIncludes(models) {
 
 function buildAttributes() {
   return {
-    include: [[literal(CUSTOMER_NAME_SUBQUERY), 'CUSTOMER_NAME']],
+    include: [
+      [literal(CUSTOMER_NAME_SUBQUERY), 'CUSTOMER_NAME'],
+      [literal(LATEST_REQUEST_FIELD('SOLD_TO')), 'SOLD_TO'],
+      [literal(LATEST_REQUEST_FIELD('REQUESTED_SALES_GROUP')), 'SALES_GROUP_CODE'],
+      [literal(LATEST_REQUEST_FIELD('CUSTOMER_PHONE')), 'PHONE'],
+      [literal(LATEST_REQUEST_FIELD('CUSTOMER_FAX')), 'FAX'],
+      [literal(LATEST_REQUEST_FIELD('CUSTOMER_ADDRESS')), 'ADDRESS'],
+    ],
   };
 }
 
@@ -196,12 +221,17 @@ function mapCustomer(customer) {
     id: customer.ID,
     TAX_NO: customer.TAX_NO || '',
     CUSTOMER_NAME: customer.get('CUSTOMER_NAME') || '',
+    SOLD_TO: customer.get('SOLD_TO') || '',
+    SALES_GROUP: salesGroupName(customer.get('SALES_GROUP_CODE')),
+    PHONE: customer.get('PHONE') || '',
+    FAX: customer.get('FAX') || '',
+    ADDRESS: customer.get('ADDRESS') || '',
     REGISTERED_DATE: formatDate(customer.REGISTERED_DATE),
     REGISTERED_CAPITAL_AMOUNT: toNumber(customer.REGISTERED_CAPITAL_AMOUNT),
     SIZE_ID: customer.SIZE_ID || '',
     SIZE: customer.size?.NAME || '',
     BUSINESS_TYPE: customer.BUSINESS_TYPE_INTER || '',
-    CUSTOMER_TYPE: customer.CUSTOMER_TYPE_INTER || '',
+    CUSTOMER_TYPE: customer.CUSTOMER_TYPE_EXTER || '',
     DIRECTORS: customer.DIRECTORS || '',
     SHAREHOLDERS: customer.SHAREHOLDERS || '',
     UPDATED_DATE: formatUpdatedDate(customer.UPDATED_DATE),
@@ -269,7 +299,7 @@ function validationError(message) {
 }
 
 function normalizeCustomerUpdate(payload) {
-  const fields = ['TAX_NO', 'REGISTERED_DATE', 'REGISTERED_CAPITAL_AMOUNT', 'SIZE_ID', 'BUSINESS_TYPE_INTER', 'CUSTOMER_TYPE_INTER', 'DIRECTORS', 'SHAREHOLDERS'];
+  const fields = ['TAX_NO', 'REGISTERED_DATE', 'REGISTERED_CAPITAL_AMOUNT', 'SIZE_ID', 'CUSTOMER_TYPE_EXTER', 'DIRECTORS', 'SHAREHOLDERS'];
   const update = {};
 
   fields.forEach((field) => {
@@ -277,12 +307,30 @@ function normalizeCustomerUpdate(payload) {
   });
 
   if (!Object.keys(update).length) throw validationError('No customer fields were supplied.');
+  if (Object.prototype.hasOwnProperty.call(update, 'TAX_NO')
+    && (typeof update.TAX_NO !== 'string' || !update.TAX_NO.trim())) {
+    throw validationError('TAX_NO is required.');
+  }
   if (typeof update.TAX_NO === 'string' && update.TAX_NO.length > 13) throw validationError('TAX_NO must not exceed 13 characters.');
-  ['BUSINESS_TYPE_INTER', 'CUSTOMER_TYPE_INTER', 'DIRECTORS', 'SHAREHOLDERS'].forEach((field) => {
+  ['CUSTOMER_TYPE_EXTER', 'DIRECTORS', 'SHAREHOLDERS'].forEach((field) => {
     if (typeof update[field] === 'string' && update[field].length > 2048) throw validationError(`${field} must not exceed 2048 characters.`);
   });
-  if (update.REGISTERED_DATE !== undefined && update.REGISTERED_DATE !== null && update.REGISTERED_DATE !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(update.REGISTERED_DATE)) {
-    throw validationError('REGISTERED_DATE must use YYYY-MM-DD.');
+  if (Object.prototype.hasOwnProperty.call(update, 'REGISTERED_DATE')) {
+    if (update.REGISTERED_DATE === '') {
+      update.REGISTERED_DATE = null;
+    } else if (typeof update.REGISTERED_DATE === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(update.REGISTERED_DATE)) {
+      const [day, month, year] = update.REGISTERED_DATE.split('/');
+      update.REGISTERED_DATE = `${year}-${month}-${day}`;
+    } else if (update.REGISTERED_DATE !== null
+      && (typeof update.REGISTERED_DATE !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(update.REGISTERED_DATE))) {
+      throw validationError('REGISTERED_DATE must use YYYY-MM-DD.');
+    }
+    if (typeof update.REGISTERED_DATE === 'string') {
+      const parsedDate = new Date(`${update.REGISTERED_DATE}T00:00:00Z`);
+      if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== update.REGISTERED_DATE) {
+        throw validationError('REGISTERED_DATE must be a valid calendar date.');
+      }
+    }
   }
   if (update.REGISTERED_CAPITAL_AMOUNT !== undefined && update.REGISTERED_CAPITAL_AMOUNT !== null && update.REGISTERED_CAPITAL_AMOUNT !== '') {
     const capitalAmount = Number(update.REGISTERED_CAPITAL_AMOUNT);
@@ -310,8 +358,14 @@ async function updateCustomer(id, payload, updatedBy) {
     if (!size) throw validationError('SIZE_ID must reference an enabled size.');
   }
 
+  // Let SQL Server build the datetime values; Sequelize's JS Date strings carry a timezone offset that datetime rejects.
+  if (typeof update.REGISTERED_DATE === 'string') {
+    const [year, month, day] = update.REGISTERED_DATE.split('-').map(Number);
+    update.REGISTERED_DATE = Customer.sequelize.fn('DATEFROMPARTS', year, month, day);
+  }
+
   const [affectedRows] = await Customer.update(
-    { ...update, UPDATED_DATE: new Date(), UPDATED_BY: updatedBy },
+    { ...update, UPDATED_DATE: Customer.sequelize.fn('GETDATE'), UPDATED_BY: updatedBy },
     { where: { ID: id, ENABLED: '1' } },
   );
   return affectedRows ? getCustomerById(id) : null;
@@ -322,7 +376,7 @@ async function softDeleteCustomer(id, updatedBy) {
   const [affectedRows] = await Customer.update(
     {
       ENABLED: '0',
-      UPDATED_DATE: new Date(),
+      UPDATED_DATE: Customer.sequelize.fn('GETDATE'),
       UPDATED_BY: updatedBy,
     },
     { where: { ID: id, ENABLED: '1' } },
