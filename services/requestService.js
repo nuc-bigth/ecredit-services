@@ -409,7 +409,7 @@ async function getCompanyCode(soldTo) {
 
 function buildOrder(sort, dir) {
   if (!sort) {
-    return [['UPDATED_DATE', 'DESC']];
+    return [['CREATED_DATE', 'DESC']];
   }
 
   const column = SORT_FIELDS[sort];
