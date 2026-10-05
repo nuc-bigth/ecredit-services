@@ -2,10 +2,22 @@ const { v4: uuidv4 } = require('uuid');
 const { Op, literal } = require('sequelize');
 const { getModels } = require('../models');
 const { formatThaiDateTime } = require('../helpers/thaiDateTime');
+const LOG_TYPE_IDS = require('../constants/logTypeIds');
 
-const EMAIL_LOG_TYPE_ID = 'email';
 const MAX_DESCRIPTION_BYTES = 1024 * 1024;
 const SENSITIVE_KEY = /(password|token|secret|authorization|cookie|api[-_]?key)/i;
+const EMAIL_LOG_TYPE_IDS_BY_STATUS = {
+  PENDING: LOG_TYPE_IDS.warning,
+  SENT: LOG_TYPE_IDS.success,
+  FAILED: LOG_TYPE_IDS.error,
+};
+
+function emailLogTypeIdForStatus(status) {
+  const normalizedStatus = String(status || '').toUpperCase();
+  const logTypeId = EMAIL_LOG_TYPE_IDS_BY_STATUS[normalizedStatus];
+  if (!logTypeId) throw new Error(`Unsupported email log status: ${normalizedStatus || '(empty)'}.`);
+  return logTypeId;
+}
 
 function sanitizeValue(value, key = '') {
   if (SENSITIVE_KEY.test(key)) return '[omitted]';
@@ -67,13 +79,14 @@ function buildDescription({ status, environment, template, subject, baseSubject,
 }
 
 async function createEmailLog(payload) {
+  const logTypeId = emailLogTypeIdForStatus(payload.status);
   const { Email } = getModels();
   const databaseNow = Email.sequelize.literal('GETDATE()');
   return Email.create({
     ID: uuidv4(),
     NAME: payload.subject,
     DESCRIPTION: buildDescription(payload),
-    LOG_TYPE_ID: EMAIL_LOG_TYPE_ID,
+    LOG_TYPE_ID: logTypeId,
     REQUEST_ID: payload.requestId || null,
     CATEGORY: payload.template,
     CREATED_DATE: databaseNow,
@@ -86,9 +99,11 @@ async function createEmailLog(payload) {
 }
 
 async function updateEmailLog(emailLog, payload) {
+  const logTypeId = emailLogTypeIdForStatus(payload.status);
   const { Email } = getModels();
   await emailLog.update({
     DESCRIPTION: buildDescription(payload),
+    LOG_TYPE_ID: logTypeId,
     UPDATED_DATE: Email.sequelize.literal('GETDATE()'),
     UPDATED_BY: employeeCode(payload.user),
   });
@@ -150,4 +165,4 @@ async function findEmailLogs(requestId, emailIds) {
   return Email.findAll({ where: { ID: emailIds, REQUEST_ID: requestId, ENABLED: true } });
 }
 
-module.exports = { EMAIL_LOG_TYPE_ID, sanitizeValue, buildDescription, createEmailLog, updateEmailLog, listEmailLogs, getEmailLog, findEmailLogs, toEmailSummary, parseDescription };
+module.exports = { sanitizeValue, buildDescription, createEmailLog, updateEmailLog, listEmailLogs, getEmailLog, findEmailLogs, toEmailSummary, parseDescription };

@@ -17,5 +17,5 @@ module.exports = (sequelize) =>
       ENABLED: { type: DataTypes.BOOLEAN, allowNull: false },
       SORTING: { type: DataTypes.INTEGER },
     },
-    { tableName: 'EMAILS', timestamps: false },
+    { tableName: 'EMAIL_LOGS', timestamps: false },
   );

@@ -1,8 +1,45 @@
 /* eslint-env jest */
 
-const { buildDescription, parseDescription, sanitizeValue } = require('../services/emailLogService');
+jest.mock('../models', () => ({ getModels: jest.fn() }));
+
+const { getModels } = require('../models');
+const { buildDescription, parseDescription, sanitizeValue, createEmailLog, updateEmailLog } = require('../services/emailLogService');
 
 describe('emailLogService', () => {
+  beforeEach(() => {
+    getModels.mockReset();
+  });
+
+  test.each([
+    ['PENDING', '69bd78f0-a012-4d47-bfed-4c0abd316877'],
+    ['SENT', '23556cea-337f-475c-9b6a-830bfa08ab93'],
+    ['FAILED', '2d8e6e9d-0b7b-427f-a5ba-0e65f61d945b'],
+  ])('creates a %s email log with its matching log type', async (status, logTypeId) => {
+    const Email = {
+      sequelize: { literal: jest.fn((value) => value) },
+      create: jest.fn().mockResolvedValue({}),
+    };
+    getModels.mockReturnValue({ Email });
+
+    await createEmailLog({ status, subject: 'Subject' });
+
+    expect(Email.create).toHaveBeenCalledWith(expect.objectContaining({ LOG_TYPE_ID: logTypeId }));
+  });
+
+  test.each([
+    ['PENDING', '69bd78f0-a012-4d47-bfed-4c0abd316877'],
+    ['SENT', '23556cea-337f-475c-9b6a-830bfa08ab93'],
+    ['FAILED', '2d8e6e9d-0b7b-427f-a5ba-0e65f61d945b'],
+  ])('updates a %s email log with its matching log type', async (status, logTypeId) => {
+    const Email = { sequelize: { literal: jest.fn((value) => value) } };
+    const emailLog = { update: jest.fn().mockResolvedValue(undefined) };
+    getModels.mockReturnValue({ Email });
+
+    await updateEmailLog(emailLog, { status, subject: 'Subject' });
+
+    expect(emailLog.update).toHaveBeenCalledWith(expect.objectContaining({ LOG_TYPE_ID: logTypeId }));
+  });
+
   test('keeps raw Base64 in send parameters but shortens only display payload', () => {
     const base64 = 'A'.repeat(1024);
     const description = buildDescription({
