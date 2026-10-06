@@ -79,6 +79,26 @@ function allApprovers(history) {
     ));
 }
 
+function backwardRecipients(history, actor) {
+    const bdsApprovers = bdsReviewApprovers(history);
+    const previousApprovers = previousActioners(history).filter((item) => (
+        !/Requester/i.test(String(item.APPROVER_TYPE_NAME || ''))
+    ));
+    const backwardApprovers = currentCycleHistory(history).filter((item) => (
+        item.APPROVAL_TYPE_NAME === 'Backward'
+        && String(item.APPROVER_EMAIL || '').trim()
+    ));
+    return {
+        toRecords: bdsApprovers.map((item) => recipient(item.APPROVER_EMAIL, item.APPROVER_NAME)),
+        ccRecords: [
+            ...previousApprovers.map((item) => recipient(item.APPROVER_EMAIL, item.APPROVER_NAME)),
+            ...backwardApprovers.map((item) => recipient(item.APPROVER_EMAIL, item.APPROVER_NAME)),
+            recipient(actor?.email, actor?.displayName || actor?.name),
+        ],
+        dear: uniqueNames(bdsApprovers).join(', ') || 'All',
+    };
+}
+
 function resolveRecipients(event, history, actor) {
     if (event === 'submit' || event === 'approve') {
         const approvers = pendingApprovers(history);
@@ -98,6 +118,10 @@ function resolveRecipients(event, history, actor) {
         };
     }
 
+    if (event === 'backward') {
+        return backwardRecipients(history, actor);
+    }
+
     if (event === 'cancel' || event === 'final-cancel') {
         const requester = submitter(history);
         return {
@@ -113,6 +137,20 @@ function resolveRecipients(event, history, actor) {
         return {
             toRecords: requester ? [recipient(requester.APPROVER_EMAIL, requester.APPROVER_NAME)] : [],
             ccRecords: bdsApprovers.map((item) => recipient(item.APPROVER_EMAIL, item.APPROVER_NAME)),
+            dear: requester?.APPROVER_NAME || 'All',
+        };
+    }
+
+    if (event === 'reject') {
+        const requester = submitter(history);
+        return {
+            toRecords: requester ? [recipient(requester.APPROVER_EMAIL, requester.APPROVER_NAME)] : [],
+            ccRecords: [
+                ...previousActioners(history)
+                    .filter((item) => !/Requester/i.test(String(item.APPROVER_TYPE_NAME || '')))
+                    .map((item) => recipient(item.APPROVER_EMAIL, item.APPROVER_NAME)),
+                recipient(actor?.email, actor?.displayName || actor?.name),
+            ],
             dear: requester?.APPROVER_NAME || 'All',
         };
     }
@@ -150,6 +188,14 @@ function buildCancelledSubject(emailModel) {
     return `Request was cancelled ${emailModel.companyName} (${emailModel.salesGroup})`;
 }
 
+function buildRejectedSubject(emailModel) {
+    return `Request was rejected ${emailModel.companyName} (${emailModel.salesGroup})`;
+}
+
+function buildBackwardSubject(emailModel) {
+    return `Request was sent backward ${emailModel.companyName} (${emailModel.salesGroup})`;
+}
+
 function approvalActionsFor(requestId, approvers) {
     return approvers.map((approval) => {
         const actionLinks = ['approve', 'reject'];
@@ -176,7 +222,9 @@ async function sendRequestWorkflowNotification({ event, requestId, environment, 
     if (!eventConfig) throw new Error(`Unsupported workflow email event: ${event}`);
     const normalizedEnvironment = String(environment || '').trim().toLowerCase();
 
-    const history = await listApprovalHistory(requestId);
+    const history = event === 'backward'
+        ? await listApprovalHistory(requestId, { includeDisabledApprovals: true })
+        : await listApprovalHistory(requestId);
     if (event === 'approve' && isParallelApprovalIncomplete(history)) {
         return { skipped: true, reason: 'Parallel approval is incomplete' };
     }
@@ -200,6 +248,10 @@ async function sendRequestWorkflowNotification({ event, requestId, environment, 
                 ? buildCompletedSubject(emailModel)
                 : event === 'cancel' || event === 'final-cancel'
                     ? buildCancelledSubject(emailModel)
+                    : event === 'reject'
+                        ? buildRejectedSubject(emailModel)
+                    : event === 'backward'
+                        ? buildBackwardSubject(emailModel)
             : eventConfig.subject;
     if (!approvalApprovers.length) {
         return sendRequestWorkflowEmail({ environment: normalizedEnvironment, template: eventConfig.template, subject, emailModel, recipients, actorEmail, transporter, requestId, user });
@@ -243,6 +295,7 @@ module.exports = {
     buildApprovalSubject,
     buildCompletedSubject,
     buildCancelledSubject,
+    buildRejectedSubject,
     sendRequestWorkflowNotification,
     notifyBestEffort,
 };

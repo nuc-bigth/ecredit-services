@@ -194,6 +194,18 @@ describe('requestService.processApprovalAction', () => {
 
     expect(approvalUpdate).toHaveBeenCalledWith(
       {
+        APPROVAL_TYPE_ID: 'b76065cc-6507-458d-94ce-87231cbaa57c',
+        DESCRIPTION: 'Reviewed',
+        UPDATED_BY: updatedBy,
+        UPDATED_DATE: { fn: 'GETDATE' },
+      },
+      {
+        where: { ID: approvalId, REQUEST_ID: requestId, ENABLED: true },
+        transaction,
+      },
+    );
+    expect(approvalUpdate).toHaveBeenCalledWith(
+      {
         ENABLED: false,
         UPDATED_BY: updatedBy,
         UPDATED_DATE: { fn: 'GETDATE' },
@@ -204,7 +216,10 @@ describe('requestService.processApprovalAction', () => {
       },
     );
     expect(requestUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ STATUS_ID: 'db8b3768-8466-4974-8dff-4c374b16a639' }),
+      expect.objectContaining({
+        STATUS_ID: 'db8b3768-8466-4974-8dff-4c374b16a639',
+        CANCELLED_NOTES: 'Reviewed',
+      }),
       expect.objectContaining({ where: { ID: requestId, ENABLED: true }, transaction }),
     );
     expect(transaction.commit).toHaveBeenCalledTimes(1);

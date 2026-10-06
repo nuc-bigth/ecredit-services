@@ -744,7 +744,7 @@ function <span class="fstat-no" title="function not covered" >buildRequestLink(<
 &nbsp;
 function <span class="fstat-no" title="function not covered" >buildSalesforceLink(</span>crmId) {
 <span class="cstat-no" title="statement not covered" >  if (isMissing(crmId)) <span class="cstat-no" title="statement not covered" >return '';</span></span>
-<span class="cstat-no" title="statement not covered" >  return `${config.salesforceBaseUrl.replace(/\/$/, '')}/${encodeURIComponent(String(crmId).trim())}`;</span>
+<span class="cstat-no" title="statement not covered" >  return `${config.salesforceBaseUrl.replace(/\/$/, '')}/${encodeURIComponent(String(crmId).trim())}/view`;</span>
 }
 &nbsp;
 function <span class="fstat-no" title="function not covered" >isCurrentCycle(</span>value) {

@@ -77,7 +77,7 @@ async function processApprovalAction(req, res, next) {
       isSystemAdmin,
     );
     const reachedFinalStatus = String(request?.STATUS_ID || '') === FINAL_STATUS_ID;
-    if (['approve', 'reject'].includes(req.body?.action)) {
+    if (['approve', 'reject', 'backward'].includes(req.body?.action)) {
       await notifyBestEffort({
         event: req.body.action === 'approve' && (request.isFinalApproval || reachedFinalStatus)
           ? 'final'

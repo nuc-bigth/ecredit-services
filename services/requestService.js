@@ -13,6 +13,7 @@ const WAITING_APPROVAL_STATUS_ID = '4ba2cdc6-47aa-41bd-99a0-79e1e6b0831b';
 const FINAL_STATUS_ID = '014e8e8b-42cf-4b2f-8cae-e395e26efbcd';
 const REJECTED_STATUS_ID = '94589a22-12e5-4298-aa30-06295acbe1b9';
 const PENDING_APPROVAL_TYPE_ID = 'b4c27a6c-ab7c-4ce5-b885-997f9104c23d';
+const BACKWARD_APPROVAL_TYPE_ID = 'b76065cc-6507-458d-94ce-87231cbaa57c';
 const SMALL_CUSTOMER_SIZE_ID = 'd8ce72cf-0228-4293-9699-311eeecb926d';
 const MEDIUM_CUSTOMER_SIZE_ID = '9d9d84c7-8926-4629-b06f-2cb4d434fc33';
 const LARGE_CUSTOMER_SIZE_ID = '4b2d23db-96d6-4cef-b6ae-10a97a8ce1cb';
@@ -485,7 +486,10 @@ async function findPreviousFinancialStatementYear(Request, currentRequest) {
   return Number.isInteger(year) && year > 0 ? String(year) : null;
 }
 
-async function listApprovalHistory(requestId) {
+async function listApprovalHistory(requestId, { includeDisabledApprovals = false } = {}) {
+  const approvalHistoryOrder = includeDisabledApprovals
+    ? 'UPDATED_AT DESC, SORTING ASC'
+    : 'SORTING ASC';
   return getDatabase().query(
     `SELECT *
     FROM (
@@ -607,11 +611,11 @@ async function listApprovalHistory(requestId) {
       LEFT JOIN S_EMPLOYEE1 AS TB5 ON TB5.EMP_CODE = TB1.UPDATED_BY
       LEFT JOIN TERMS AS TB6 ON TB6.ID = TB1.TERM_ID
       LEFT JOIN RATINGS AS TB7 ON TB7.ID = TB1.RATING_ID
-      WHERE TB1.ENABLED = '1' AND TB1.REQUEST_ID = :requestId
+      WHERE (TB1.ENABLED = '1' OR :includeDisabledApprovals = 1) AND TB1.REQUEST_ID = :requestId
     ) AS APPROVAL_HISTORY
-    ORDER BY SORTING ASC`,
+    ORDER BY ${approvalHistoryOrder}`,
     {
-      replacements: { requestId },
+      replacements: { requestId, includeDisabledApprovals: includeDisabledApprovals ? 1 : 0 },
       type: QueryTypes.SELECT,
     },
   );
@@ -1725,6 +1729,18 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
     if (action === 'backward') {
       await Approval.update(
         {
+          APPROVAL_TYPE_ID: BACKWARD_APPROVAL_TYPE_ID,
+          DESCRIPTION: payload.DESCRIPTION,
+          UPDATED_BY: updatedBy,
+          UPDATED_DATE: Approval.sequelize.fn('GETDATE'),
+        },
+        {
+          where: { ID: pendingApproval.ID, REQUEST_ID: id, ENABLED: true },
+          transaction,
+        },
+      );
+      await Approval.update(
+        {
           ENABLED: false,
           UPDATED_BY: updatedBy,
           UPDATED_DATE: Approval.sequelize.fn('GETDATE'),
@@ -1737,6 +1753,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
       await Request.update(
         {
           STATUS_ID: DRAFT_STATUS_ID,
+          CANCELLED_NOTES: payload.DESCRIPTION,
           UPDATED_BY: updatedBy,
           UPDATED_DATE: Request.sequelize.fn('GETDATE'),
         },
@@ -1840,6 +1857,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
       await Request.update(
         {
           STATUS_ID: REJECTED_STATUS_ID,
+          CANCELLED_NOTES: normalizedUpdate.DESCRIPTION,
           UPDATED_BY: updatedBy,
           UPDATED_DATE: Request.sequelize.fn('GETDATE'),
         },

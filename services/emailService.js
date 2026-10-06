@@ -57,6 +57,8 @@ const MODEL_KEYS = [
   'suggestedCreditDetails',
   'currentStep',
   'lastActionedStep',
+  'cancelledNotes',
+  'rejectedNotes',
 ];
 
 function missingValue(value) {

@@ -45,7 +45,7 @@ function buildRequestLink(requestId) {
 
 function buildSalesforceLink(crmId) {
   if (isMissing(crmId)) return '';
-  return `${config.salesforceBaseUrl.replace(/\/$/, '')}/${encodeURIComponent(String(crmId).trim())}`;
+  return `${config.salesforceBaseUrl.replace(/\/$/, '')}/${encodeURIComponent(String(crmId).trim())}/view`;
 }
 
 function isCurrentCycle(value) {
@@ -102,6 +102,11 @@ function mapCreditDetailsMovements(history = []) {
 
 function selectCurrentStep(movements) {
   const currentCycleApprovals = movements.filter((movement) => movement.currentCycle);
+  const rejected = currentCycleApprovals
+    .filter((movement) => movement.approvalStatus === 'Rejected')
+    .sort((left, right) => right.sorting - left.sorting)[0];
+  if (rejected) return rejected;
+
   const pending = currentCycleApprovals
     .filter((movement) => movement.approvalStatus === 'Pending')
     .sort((left, right) => left.sorting - right.sorting)[0];
@@ -110,6 +115,7 @@ function selectCurrentStep(movements) {
 
 function selectLastActionedStep(movements, currentStep) {
   if (!currentStep) return null;
+  if (currentStep.approvalStatus === 'Rejected') return currentStep;
 
   const previousSteps = movements
     .filter((movement) => movement.currentCycle && movement.sorting < currentStep.sorting)
@@ -125,6 +131,7 @@ function mapCreditDetailsSummary(movements, currentStep, lastActionedStep) {
     status: movement.status,
     isCurrentStep: Boolean(currentStep && movement.sorting === currentStep.sorting),
     isLastActionedStep: Boolean(lastActionedStep && movement === lastActionedStep),
+    ...(movement.approvalStatus === 'Rejected' ? { isRejectedStep: true } : {}),
   }));
 }
 
@@ -242,6 +249,8 @@ function mapRequestToEmailModel(request, dear = '-', approvalHistory = []) {
     creditRatingApproved: valueOrDash(request.approvedRating?.NAME),
     approvedOpinion: valueOrDash(request.APPROVED_NOTES),
     cancelledNotes: valueOrDash(request.CANCELLED_NOTES),
+    rejectedNotes: valueOrDash(request.CANCELLED_NOTES),
+    backwardedNotes: valueOrDash(request.CANCELLED_NOTES),
     approvedCreditDetails: {
       ...finalConfirmedDetails,
       bankGuarantee: approvedCreditMovement?.bankGuarantee === 'Yes',

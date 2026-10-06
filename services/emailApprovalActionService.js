@@ -193,9 +193,18 @@ async function confirmEmailApprovalAction(token, comment) {
       );
     } else if (payload.action === 'reject') {
       await database.query(
-        `UPDATE REQUESTS SET STATUS_ID = :rejectedStatusId, UPDATED_BY = :updatedBy, UPDATED_DATE = GETDATE()
+        `UPDATE REQUESTS SET STATUS_ID = :rejectedStatusId, CANCELLED_NOTES = :comment, UPDATED_BY = :updatedBy, UPDATED_DATE = GETDATE()
          WHERE ID = :requestId AND ENABLED = '1'`,
-        { replacements: { requestId: payload.requestId, updatedBy: payload.approverId, rejectedStatusId: '94589a22-12e5-4298-aa30-06295acbe1b9' }, type: QueryTypes.UPDATE, transaction },
+        {
+          replacements: {
+            requestId: payload.requestId,
+            comment: normalizedComment,
+            updatedBy: payload.approverId,
+            rejectedStatusId: '94589a22-12e5-4298-aa30-06295acbe1b9',
+          },
+          type: QueryTypes.UPDATE,
+          transaction,
+        },
       );
     } else {
       const pendingRows = await database.query(

@@ -75,6 +75,7 @@ describe('requestEmailModelService', () => {
       EXISTING_LIMIT_AMOUNT: '10000',
       REQUESTED_LIMIT_AMOUNT: '20000',
       PROPOSED_LIMIT_AMOUNT: '15000',
+      CANCELLED_NOTES: 'Please review the request details.',
     }, 'Approver');
 
     expect(model).toEqual(expect.objectContaining({
@@ -108,6 +109,8 @@ describe('requestEmailModelService', () => {
       creditLimitExisting: '10,000.00',
       creditLimitRequested: '20,000.00',
       creditLimitProposed: '15,000.00',
+      cancelledNotes: 'Please review the request details.',
+      backwardedNotes: 'Please review the request details.',
     }));
   });
 

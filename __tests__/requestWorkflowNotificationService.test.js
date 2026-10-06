@@ -7,6 +7,7 @@ const {
   buildApprovalSubject,
   buildCompletedSubject,
   buildCancelledSubject,
+  buildRejectedSubject,
 } = require('../services/requestWorkflowNotificationService');
 
 function approval(overrides = {}) {
@@ -41,6 +42,13 @@ describe('request workflow notification recipients', () => {
       companyName: 'Pentel Co., Ltd.',
       salesGroup: '100 - TGEE',
     })).toBe('Request was cancelled Pentel Co., Ltd. (100 - TGEE)');
+  });
+
+  it('builds the rejected subject from company name and sales group', () => {
+    expect(buildRejectedSubject({
+      companyName: 'Pentel Co., Ltd.',
+      salesGroup: '100 - TGEE',
+    })).toBe('Request was rejected Pentel Co., Ltd. (100 - TGEE)');
   });
 
   it('groups all pending approvers from the first pending step', () => {
@@ -89,7 +97,7 @@ describe('request workflow notification recipients', () => {
     ]);
   });
 
-  it('notifies the submitter and prior approvers with the actor in CC after rejection', () => {
+  it('sends rejection to the requester and copies prior approved approvers', () => {
     const history = [
       {
         APPROVER_TYPE_NAME: 'Requester',
@@ -105,12 +113,12 @@ describe('request workflow notification recipients', () => {
       email: 'actor@example.com',
       displayName: 'ACTOR',
     })).toEqual({
-      toRecords: [
-        { email: 'requester@example.com', name: 'REQUESTER' },
+      toRecords: [{ email: 'requester@example.com', name: 'REQUESTER' }],
+      ccRecords: [
         { email: 'prior@example.com', name: 'PRIOR' },
+        { email: 'actor@example.com', name: 'ACTOR' },
       ],
-      ccRecords: [{ email: 'actor@example.com', name: 'ACTOR' }],
-      dear: 'ACTOR',
+      dear: 'REQUESTER',
     });
   });
 

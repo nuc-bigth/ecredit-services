@@ -15,6 +15,7 @@ const { sendRequestWorkflowEmail } = require('../emails/requestWorkflowEmail');
 const {
   pendingApprovers,
   isParallelApprovalIncomplete,
+  resolveRecipients,
   sendRequestWorkflowNotification,
 } = require('../services/requestWorkflowNotificationService');
 
@@ -116,5 +117,80 @@ describe('parallel workflow notifications', () => {
 
     expect(sendRequestWorkflowEmail).toHaveBeenCalledTimes(1);
     expect(sendRequestWorkflowEmail.mock.calls[0][0].recipients.to).toEqual(['next@example.com']);
+  });
+
+  it('sends backward notifications to BDS Review and copies previous approvers plus the actor', () => {
+    const history = [
+      approval({
+        APPROVER_TYPE_NAME: 'Requester',
+        APPROVAL_STEP: 1,
+        APPROVER_NAME: 'REQUESTER',
+        APPROVER_EMAIL: 'requester@example.com',
+      }),
+      approval({
+        APPROVER_TYPE_NAME: 'Manager Approve',
+        APPROVAL_STEP: 2,
+        APPROVAL_TYPE_NAME: 'Approved',
+        APPROVER_NAME: 'APPROVER',
+        APPROVER_EMAIL: 'approver@example.com',
+      }),
+      approval({
+        APPROVER_TYPE_NAME: 'Manager Approve',
+        APPROVAL_STEP: 3,
+        APPROVAL_TYPE_NAME: 'Backward',
+        APPROVER_NAME: 'BACKWARD-APPROVER',
+        APPROVER_EMAIL: 'backward@example.com',
+      }),
+      approval({
+        APPROVER_TYPE_NAME: 'Manager Approve (BDS Review)',
+        APPROVAL_STEP: 2,
+        APPROVAL_TYPE_NAME: 'Pending',
+        APPROVER_NAME: 'BDS-APPROVER',
+        APPROVER_EMAIL: 'bds@example.com',
+      }),
+    ];
+
+    expect(resolveRecipients('backward', history, {
+      email: 'actor@example.com',
+      displayName: 'ACTOR',
+    })).toEqual({
+      toRecords: [{ email: 'bds@example.com', name: 'BDS-APPROVER' }],
+      ccRecords: [
+        { email: 'approver@example.com', name: 'APPROVER' },
+        { email: 'backward@example.com', name: 'BACKWARD-APPROVER' },
+        { email: 'actor@example.com', name: 'ACTOR' },
+      ],
+      dear: 'BDS-APPROVER',
+    });
+  });
+
+  it('includes company and sales group in the backward subject', async () => {
+    listApprovalHistory.mockResolvedValue([
+      approval({
+        APPROVER_TYPE_NAME: 'Requester',
+        APPROVAL_STEP: 1,
+        APPROVER_NAME: 'REQUESTER',
+        APPROVER_EMAIL: 'requester@example.com',
+      }),
+      approval({
+        APPROVER_TYPE_NAME: 'Manager Approve (BDS Review)',
+        APPROVAL_STEP: 2,
+        APPROVER_NAME: 'BDS-APPROVER',
+        APPROVER_EMAIL: 'bds@example.com',
+      }),
+    ]);
+
+    await sendRequestWorkflowNotification({
+      event: 'backward',
+      requestId: 'request-1',
+      environment: 'prd',
+      actorEmail: 'actor@example.com',
+      actorName: 'ACTOR',
+      transporter: {},
+    });
+
+    expect(sendRequestWorkflowEmail.mock.calls[0][0].subject)
+      .toBe('Request was sent backward Acme (100 - TGEE)');
+    expect(listApprovalHistory).toHaveBeenCalledWith('request-1', { includeDisabledApprovals: true });
   });
 });
