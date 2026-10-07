@@ -4,6 +4,7 @@ const { getModels } = require('../models');
 const { getDatabase } = require('../config/database');
 const attachmentService = require('./attachmentService');
 const customerLogService = require('./customerLogService');
+const { propagateApprovedValues } = require('./approvalWorkflowService');
 
 const QUICK_FILTERS = new Set(['rating', 'limit', 'term']);
 const DRAFT_STATUS_ID = 'db8b3768-8466-4974-8dff-4c374b16a639';
@@ -1663,7 +1664,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
          )`
       : '';
     const pendingApprovals = await database.query(
-      `SELECT TOP 1 TB1.ID, TB1.APPROVER_ID
+      `SELECT TOP 1 TB1.ID, TB1.APPROVER_ID, TB1.APPROVAL_STEP
        FROM APPROVALS AS TB1
        INNER JOIN APPROVAL_TYPES AS TB2
          ON CONVERT(VARCHAR(36), TB2.ID) COLLATE DATABASE_DEFAULT
@@ -1851,6 +1852,15 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
           transaction,
         },
       );
+      await propagateApprovedValues({
+        requestId: id,
+        approvalId: pendingApproval.ID,
+        approvalStep: pendingApproval.APPROVAL_STEP,
+        updatedBy,
+        pendingApprovalTypeId: PENDING_APPROVAL_TYPE_ID,
+        approvedApprovalTypeId: approvalUpdate.APPROVAL_TYPE_ID,
+        transaction,
+      });
     }
 
     if (action === 'reject') {

@@ -141,8 +141,9 @@ describe('requestService.processApprovalAction', () => {
 
   it('changes approval status when approving the selected approval ID', async () => {
     database.query
-      .mockResolvedValueOnce([{ ID: approvalId, APPROVER_ID: 67890 }])
+      .mockResolvedValueOnce([{ ID: approvalId, APPROVER_ID: 67890, APPROVAL_STEP: 4 }])
       .mockResolvedValueOnce([{ ID: 'approved-type' }])
+      .mockResolvedValueOnce([1])
       .mockResolvedValueOnce([1])
       .mockResolvedValueOnce([{ TOTAL: 0 }]);
 
@@ -155,6 +156,7 @@ describe('requestService.processApprovalAction', () => {
 
     expect(approvalUpdate.mock.calls[0][0].APPROVAL_TYPE_ID).toBe('approved-type');
     expect(database.query.mock.calls[1][1].replacements).toEqual({ approvalTypeName: 'Approved' });
+    expect(database.query.mock.calls[0][0]).toContain('TB1.APPROVAL_STEP');
     expect(requestUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         STATUS_ID: finalStatusId,
@@ -179,6 +181,16 @@ describe('requestService.processApprovalAction', () => {
     expect(database.query.mock.calls[2][1].replacements.approvedTypeId).toBe('approved-type');
     expect(database.query.mock.calls[2][1].replacements.pendingApprovalTypeId)
       .toBe('b4c27a6c-ab7c-4ce5-b885-997f9104c23d');
+    expect(database.query.mock.calls[3][0]).toContain('NOT EXISTS');
+    expect(database.query.mock.calls[3][0]).toContain('TB1.APPROVAL_STEP > :approvalStep');
+    expect(database.query.mock.calls[3][1].replacements).toEqual(expect.objectContaining({
+      requestId,
+      approvalId,
+      approvalStep: 4,
+      updatedBy,
+      pendingApprovalTypeId: 'b4c27a6c-ab7c-4ce5-b885-997f9104c23d',
+      approvedApprovalTypeId: 'approved-type',
+    }));
     expect(transaction.commit).toHaveBeenCalledTimes(1);
   });
 

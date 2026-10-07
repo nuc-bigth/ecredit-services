@@ -1,3 +1,5 @@
+/* eslint-env jest */
+
 const jwt = require('jsonwebtoken');
 const { getDatabase } = require('../config/database');
 const {
@@ -27,6 +29,7 @@ const approval = {
   ID: 'approval-1',
   REQUEST_ID: 'request-1',
   APPROVER_ID: '1001',
+  APPROVAL_STEP: 1,
   APPROVER_EMAIL: 'approver@example.com',
   APPROVER_NAME: 'Approver',
   ALLOW_BACKWARD: true,
@@ -102,6 +105,7 @@ describe('emailApprovalActionService request status guard', () => {
       .mockResolvedValueOnce([approval])
       .mockResolvedValueOnce([1])
       .mockResolvedValueOnce([0])
+      .mockResolvedValueOnce([1])
       .mockResolvedValueOnce([{ TOTAL: 1 }]));
     getDatabase.mockReturnValue(database);
 
@@ -111,6 +115,14 @@ describe('emailApprovalActionService request status guard', () => {
     expect(database.query.mock.calls[1][1].replacements).toEqual(expect.objectContaining({
       pendingTypeId: PENDING_APPROVAL_TYPE_ID,
       waitingStatusId: WAITING_APPROVAL_STATUS_ID,
+    }));
+    expect(database.query.mock.calls[3][0]).toContain('NOT EXISTS');
+    expect(database.query.mock.calls[3][1].replacements).toEqual(expect.objectContaining({
+      requestId: payload.requestId,
+      approvalId: payload.approvalId,
+      approvalStep: 1,
+      pendingApprovalTypeId: PENDING_APPROVAL_TYPE_ID,
+      approvedApprovalTypeId: 'aab5ce03-1c54-48c8-8305-6b1a017b43fd',
     }));
     expect(database.transactionRef.commit).toHaveBeenCalledTimes(1);
   });

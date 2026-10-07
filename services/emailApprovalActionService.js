@@ -3,6 +3,7 @@ const { randomUUID } = require('crypto');
 const config = require('../config/env');
 const { getDatabase } = require('../config/database');
 const { QueryTypes } = require('sequelize');
+const { propagateApprovedValues } = require('./approvalWorkflowService');
 
 const PENDING_APPROVAL_TYPE_ID = 'b4c27a6c-ab7c-4ce5-b885-997f9104c23d';
 const WAITING_APPROVAL_STATUS_ID = '4ba2cdc6-47aa-41bd-99a0-79e1e6b0831b';
@@ -178,6 +179,15 @@ async function confirmEmailApprovalAction(token, comment) {
           transaction,
         },
       );
+      await propagateApprovedValues({
+        requestId: payload.requestId,
+        approvalId: payload.approvalId,
+        approvalStep: approval.APPROVAL_STEP,
+        updatedBy: payload.approverId,
+        pendingApprovalTypeId: PENDING_APPROVAL_TYPE_ID,
+        approvedApprovalTypeId: ACTION_TYPE_IDS.approve,
+        transaction,
+      });
     }
 
     if (payload.action === 'backward') {
