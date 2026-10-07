@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "express": {
+      "source": "full-stack-skills/nodejs-skills",
+      "sourceType": "github",
+      "skillPath": "skills/express/SKILL.md",
+      "computedHash": "f2f09385e6f76adc2ff8d6e33839fbcbc6a894f0891758664e8c9b9d9bf00ed4"
+    }
+  }
+}
