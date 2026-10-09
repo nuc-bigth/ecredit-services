@@ -1,5 +1,4 @@
 const logger = require('../config/logger');
-const config = require('../config/env');
 const tokenValidator = require('../helpers/tokenValidator');
 const errorCodes = require('../helpers/errorCodes');
 const userProfileService = require('../services/userProfileService');
@@ -113,6 +112,17 @@ async function authenticationMiddleware(req, res, next) {
         oid: req.user.oid,
         stack: dbError.stack,
       });
+
+      if (dbError.code === 'INVALID_VIEW_AS_TARGET') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: dbError.code,
+            message: 'The configured View As employee could not be found. Please contact an administrator.',
+          },
+          correlationId,
+        });
+      }
 
       return res.status(503).json({
         success: false,

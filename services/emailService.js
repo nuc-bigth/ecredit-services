@@ -132,20 +132,22 @@ function resolveTemplate(template) {
 }
 
 function createEmailService({ environment = config.environment, bcc = config.email.bcc, transporter } = {}) {
-  async function sendEmail({ template, subject, model, recipients, actorEmail, requestId, user, resendOf, effectiveRecipients, effectiveBcc, intendedRecipients }) {
+  async function sendEmail({ template, subject, model, recipients, actorEmail, requestId, user, resendOf, effectiveRecipients, effectiveBcc, intendedRecipients, auditActorCode }) {
     const normalizedEnvironment = String(environment).toLowerCase();
     if (!SUPPORTED_ENVIRONMENTS.has(normalizedEnvironment)) throw new Error('Unsupported email environment.');
     if (missingValue(subject)) throw new Error('subject is required.');
 
     const resolvedTemplate = resolveTemplate(template);
     const resolveActorEmail = normalizedEnvironment === 'prd' ? actorEmail : (user?.profile?.LOGGED_IN_EMAIL || actorEmail);
-    const resolvedRecipients = effectiveRecipients || resolveRecipients(normalizedEnvironment, recipients, resolveActorEmail, bcc);
+    const resolvedRecipients = normalizedEnvironment === 'prd'
+      ? (effectiveRecipients || resolveRecipients(normalizedEnvironment, recipients, resolveActorEmail, bcc))
+      : resolveRecipients(normalizedEnvironment, recipients, resolveActorEmail, bcc);
     const bccRecipients = effectiveBcc || normalizeEmailList(bcc, 'bcc');
     if (!bccRecipients.length) throw new Error('EMAIL_BCC is required.');
 
     const normalizedModel = normalizeModel(model);
     const emailSubject = `${subjectPrefix(normalizedEnvironment)} - ${String(subject).trim()}`;
-    const emailPayload = { requestId, user, environment: normalizedEnvironment, template: resolvedTemplate, baseSubject: String(subject).trim(), subject: emailSubject, model: normalizedModel, recipients: resolvedRecipients, bcc: bccRecipients, resendOf };
+    const emailPayload = { requestId, user, auditActorCode, environment: normalizedEnvironment, template: resolvedTemplate, baseSubject: String(subject).trim(), subject: emailSubject, model: normalizedModel, recipients: resolvedRecipients, bcc: bccRecipients, resendOf };
     const debugRecipients = intendedRecipients || recipients || resolvedRecipients;
     const templateDebugRecipients = {
       to: normalizeEmailList(debugRecipients.to, 'intendedRecipients.to'),

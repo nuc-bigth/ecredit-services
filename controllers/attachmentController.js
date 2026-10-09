@@ -1,10 +1,10 @@
 const logger = require('../config/logger');
 const attachmentUpload = require('../middlewares/attachmentUpload');
 const attachmentService = require('../services/attachmentService');
+const { effectiveEmployeeCode } = require('../helpers/userIdentity');
 
 function requireUpdater(req) {
-  const updatedBy = req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE;
-  const employeeId = Number(updatedBy);
+  const employeeId = effectiveEmployeeCode(req.user?.profile);
   if (Number.isSafeInteger(employeeId)) return employeeId;
 
   const error = new Error('Authenticated user profile must contain a numeric employee code.');

@@ -4,6 +4,12 @@ const logger = require('../config/logger');
 const { getModels } = require('../models');
 const { formatThaiDateTime } = require('../helpers/thaiDateTime');
 const LOG_TYPE_IDS = require('../constants/logTypeIds');
+const {
+  effectiveEmployeeCode,
+  mainEmployeeCode,
+  approvalAuditEmployeeCode,
+  isMainSystemAdmin,
+} = require('../helpers/userIdentity');
 const MAX_DESCRIPTION_BYTES = 32 * 1024;
 
 function requestIdFromPath(requestPath) {
@@ -87,9 +93,9 @@ function serializeDescription(payload) {
   });
 }
 
-function employeeCode(user) {
-  const value = Number(user?.profile?.LOGGED_IN_CODE ?? user?.profile?.CODE);
-  return Number.isSafeInteger(value) ? value : null;
+function isApprovalOrFinalAction(method, requestPath) {
+  return ['POST', 'PATCH', 'PUT'].includes(String(method).toUpperCase())
+    && /\/requests\/[^/?]+\/(?:approval-action|final-approval)\/?(?:\?.*)?$/i.test(String(requestPath || ''));
 }
 
 function normalizePage(value, fallback) {
@@ -222,7 +228,13 @@ async function persistRequestEvent({ req, res, durationMs }) {
 
   const statusCode = res.statusCode;
   const logType = logTypeForStatus(statusCode);
-  const actorCode = employeeCode(req.user);
+  const profile = req.user?.profile;
+  const approvalOrFinalAction = isApprovalOrFinalAction(req.method, requestPath);
+  const mainUserAudit = approvalOrFinalAction && isMainSystemAdmin(profile);
+  const createdBy = effectiveEmployeeCode(profile);
+  const actorCode = approvalOrFinalAction
+    ? approvalAuditEmployeeCode(profile)
+    : effectiveEmployeeCode(profile);
 
   if (actorCode === null) {
     return;
@@ -233,9 +245,19 @@ async function persistRequestEvent({ req, res, durationMs }) {
     requestId,
     actor: {
       employeeCode: actorCode,
-      displayName: req.user?.displayName || null,
-      email: req.user?.email || null,
+      displayName: mainUserAudit
+        ? req.user?.displayName || null
+        : profile?.FULL_NAME || req.user?.displayName || null,
+      email: mainUserAudit
+        ? req.user?.email || null
+        : profile?.EMAIL || req.user?.email || null,
     },
+    ...(profile?.IS_VIEWING_AS ? {
+      viewing: {
+        mainUser: mainEmployeeCode(profile),
+        viewAs: effectiveEmployeeCode(profile),
+      },
+    } : {}),
     request: {
       method: req.method,
       path: requestPath,
@@ -258,7 +280,7 @@ async function persistRequestEvent({ req, res, durationMs }) {
     REQUEST_ID: requestId,
     CREATED_DATE: databaseNow,
     UPDATED_DATE: databaseNow,
-    CREATED_BY: actorCode,
+    CREATED_BY: createdBy,
     UPDATED_BY: actorCode,
     ENABLED: true,
   });
@@ -271,4 +293,5 @@ module.exports = {
   persistRequestEvent,
   requestIdFromPath,
   serializeDescription,
+  isApprovalOrFinalAction,
 };

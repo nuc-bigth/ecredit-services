@@ -217,7 +217,7 @@ function approvalActionsFor(requestId, approvers) {
     }).flat();
 }
 
-async function sendRequestWorkflowNotification({ event, requestId, environment, actorEmail, actorName, user, transporter }) {
+async function sendRequestWorkflowNotification({ event, requestId, environment, actorEmail, actorName, user, transporter, auditActorCode }) {
     const eventConfig = EVENT_CONFIG[event];
     if (!eventConfig) throw new Error(`Unsupported workflow email event: ${event}`);
     const normalizedEnvironment = String(environment || '').trim().toLowerCase();
@@ -254,7 +254,7 @@ async function sendRequestWorkflowNotification({ event, requestId, environment, 
                         ? buildBackwardSubject(emailModel)
             : eventConfig.subject;
     if (!approvalApprovers.length) {
-        return sendRequestWorkflowEmail({ environment: normalizedEnvironment, template: eventConfig.template, subject, emailModel, recipients, actorEmail, transporter, requestId, user });
+        return sendRequestWorkflowEmail({ environment: normalizedEnvironment, template: eventConfig.template, subject, emailModel, recipients, actorEmail, transporter, requestId, user, auditActorCode });
     }
 
     return Promise.all(approvalApprovers.map(async (approver) => {
@@ -270,6 +270,7 @@ async function sendRequestWorkflowNotification({ event, requestId, environment, 
             transporter,
             requestId,
             user,
+            auditActorCode,
         });
     }));
 }

@@ -61,7 +61,17 @@ async function getUserProfileByEmail(email) {
   const manager1 = employee.manager1;
   const manager2 = employee.manager2;
   const costCenter = user.costCenter;
-  const viewAsEmployee = user.viewAsEmployee;
+  const viewAsCode = user.VIEW_AS === null || user.VIEW_AS === undefined
+    ? ''
+    : String(user.VIEW_AS).trim();
+  const isViewingAs = Boolean(viewAsCode && viewAsCode !== String(user.ID).trim());
+  const viewAsEmployee = isViewingAs ? user.viewAsEmployee : null;
+  if (isViewingAs && !viewAsEmployee) {
+    const error = new Error(`View As employee ${viewAsCode} was not found.`);
+    error.statusCode = 403;
+    error.code = 'INVALID_VIEW_AS_TARGET';
+    throw error;
+  }
   const role = topUserRole ? topUserRole.role : null;
 
   let effectiveEmployee = employee;
@@ -122,10 +132,11 @@ async function getUserProfileByEmail(email) {
     LOGGED_IN_CODE: employee.EMP_CODE || '',
     LOGGED_IN_EMAIL: employee.CURRENT_EMAIL || '',
     LOGGED_IN_ROLE: role ? role.NAME : null,
+    LOGGED_IN_ROLE_ID: role ? role.ID : null,
     EFFECTIVE_CODE: effectiveEmployee.EMP_CODE || '',
     EFFECTIVE_EMAIL: effectiveEmployee.CURRENT_EMAIL || '',
     EFFECTIVE_ROLE: effectiveRole ? effectiveRole.NAME : null,
-    IS_VIEWING_AS: Boolean(viewAsEmployee),
+    IS_VIEWING_AS: isViewingAs,
   };
 }
 

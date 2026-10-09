@@ -15,7 +15,7 @@ async function getCurrentUser(req, res, next) {
     const correlationId = res.locals.correlationId || 'N/A';
     const user = req.user; // Set by authentication middleware
     const profile = { ...(user.profile || {}) };
-    ['LOGGED_IN_CODE', 'LOGGED_IN_EMAIL', 'LOGGED_IN_ROLE', 'MAIN_CODE', 'MAIN_EMAIL']
+    ['LOGGED_IN_CODE', 'LOGGED_IN_EMAIL', 'LOGGED_IN_ROLE', 'LOGGED_IN_ROLE_ID', 'MAIN_CODE', 'MAIN_EMAIL']
       .forEach((field) => delete profile[field]);
 
     // Sanitize response - don't include all JWT claims

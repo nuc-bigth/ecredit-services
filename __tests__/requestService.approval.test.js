@@ -139,6 +139,23 @@ describe('requestService.processApprovalAction', () => {
     expect(transaction.rollback).not.toHaveBeenCalled();
   });
 
+  it('checks approval as the effective user while stamping the separate audit user', async () => {
+    const auditBy = 20221459;
+    database.query.mockResolvedValueOnce([{ ID: approvalId }]);
+
+    await requestService.processApprovalAction(
+      requestId,
+      'save',
+      approvalPayload(),
+      updatedBy,
+      false,
+      auditBy,
+    );
+
+    expect(database.query.mock.calls[0][1].replacements.updatedBy).toBe(updatedBy);
+    expect(approvalUpdate.mock.calls[0][0].UPDATED_BY).toBe(auditBy);
+  });
+
   it('changes approval status when approving the selected approval ID', async () => {
     database.query
       .mockResolvedValueOnce([{ ID: approvalId, APPROVER_ID: 67890, APPROVAL_STEP: 4 }])
@@ -187,7 +204,7 @@ describe('requestService.processApprovalAction', () => {
       requestId,
       approvalId,
       approvalStep: 4,
-      updatedBy,
+      auditBy: updatedBy,
       pendingApprovalTypeId: 'b4c27a6c-ab7c-4ce5-b885-997f9104c23d',
       approvedApprovalTypeId: 'approved-type',
     }));
@@ -365,6 +382,7 @@ describe('requestService.processApprovalAction', () => {
   });
 
   it('moves an authorized final cancellation to cancelled', async () => {
+    const auditBy = 20221459;
     database.query.mockResolvedValueOnce([{ ID: requestId }]);
 
     await requestService.processApprovalAction(
@@ -372,12 +390,15 @@ describe('requestService.processApprovalAction', () => {
       'finalCancel',
       { DESCRIPTION: 'Customer withdrew the request.' },
       updatedBy,
+      false,
+      auditBy,
     );
 
     expect(requestUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ STATUS_ID: cancelledStatusId }),
+      expect.objectContaining({ STATUS_ID: cancelledStatusId, UPDATED_BY: auditBy }),
       expect.objectContaining({ transaction }),
     );
+    expect(database.query.mock.calls[0][1].replacements.updatedBy).toBe(updatedBy);
     expect(transaction.commit).toHaveBeenCalledTimes(1);
   });
 

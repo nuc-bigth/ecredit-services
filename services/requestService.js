@@ -354,6 +354,8 @@ function mapRequest(request) {
     STATUS_ID: request.STATUS_ID || '',
     STATUS: request.status?.NAME || '',
     REQUESTED_NAME: employeeName(request.requestedByEmployee),
+    REQUESTED_BY: request.REQUESTED_BY === null || request.REQUESTED_BY === undefined
+      ? null : Number(request.REQUESTED_BY),
     UPDATED_NAME: employeeName(request.updatedByEmployee),
     CREATED_DATE: formatUpdatedDate(request.CREATED_DATE),
     UPDATED_DATE: formatUpdatedDate(request.UPDATED_DATE),
@@ -1548,7 +1550,7 @@ function normalizeApprovalUpdate(payload) {
   return update;
 }
 
-async function saveFinalApproval(id, payload, updatedBy, isSystemAdmin = false) {
+async function saveFinalApproval(id, payload, updatedBy, isSystemAdmin = false, auditBy = updatedBy) {
   const normalizedUpdate = normalizeApprovalUpdate(payload);
   const { Request } = getModels();
   const database = getDatabase();
@@ -1616,7 +1618,7 @@ async function saveFinalApproval(id, payload, updatedBy, isSystemAdmin = false) 
         APPROVED_NOTES: normalizedUpdate.DESCRIPTION,
         IS_PERMANENT_APPROVED: normalizedUpdate.IS_PERMANENT,
         IS_TEMPORARY_APPROVED: normalizedUpdate.IS_TEMPORARY,
-        UPDATED_BY: updatedBy,
+        UPDATED_BY: auditBy,
         UPDATED_DATE: Request.sequelize.fn('GETDATE'),
       },
       { where: { ID: id, ENABLED: true }, transaction },
@@ -1629,9 +1631,9 @@ async function saveFinalApproval(id, payload, updatedBy, isSystemAdmin = false) 
   }
 }
 
-async function processApprovalAction(id, action, payload, updatedBy, isSystemAdmin = false) {
+async function processApprovalAction(id, action, payload, updatedBy, isSystemAdmin = false, auditBy = updatedBy) {
   if (action === 'finalConfirm' || action === 'finalCancel') {
-    return processFinalAction(id, action, payload, updatedBy, isSystemAdmin);
+    return processFinalAction(id, action, payload, updatedBy, isSystemAdmin, auditBy);
   }
   if (!['save', 'approve', 'reject', 'backward'].includes(action)) {
     throw validationError('Unsupported approval action.');
@@ -1732,7 +1734,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
         {
           APPROVAL_TYPE_ID: BACKWARD_APPROVAL_TYPE_ID,
           DESCRIPTION: payload.DESCRIPTION,
-          UPDATED_BY: updatedBy,
+          UPDATED_BY: auditBy,
           UPDATED_DATE: Approval.sequelize.fn('GETDATE'),
         },
         {
@@ -1743,7 +1745,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
       await Approval.update(
         {
           ENABLED: false,
-          UPDATED_BY: updatedBy,
+          UPDATED_BY: auditBy,
           UPDATED_DATE: Approval.sequelize.fn('GETDATE'),
         },
         {
@@ -1755,7 +1757,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
         {
           STATUS_ID: DRAFT_STATUS_ID,
           CANCELLED_NOTES: payload.DESCRIPTION,
-          UPDATED_BY: updatedBy,
+          UPDATED_BY: auditBy,
           UPDATED_DATE: Request.sequelize.fn('GETDATE'),
         },
         { where: { ID: id, ENABLED: true }, transaction },
@@ -1772,7 +1774,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
       VALID_TO: normalizedUpdate.VALID_TO
         ? databaseDateFromYmd(Approval.sequelize, normalizedUpdate.VALID_TO)
         : null,
-      UPDATED_BY: updatedBy,
+      UPDATED_BY: auditBy,
       UPDATED_DATE: Approval.sequelize.fn('GETDATE'),
     };
 
@@ -1818,7 +1820,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
              IS_CASH_DEPOSIT = :cashDeposit,
              CASH_DEPOSIT_AMOUNT = :cashDepositAmount,
              APPROVAL_TYPE_ID = :approvedTypeId,
-             UPDATED_BY = :updatedBy,
+             UPDATED_BY = :auditBy,
              UPDATED_DATE = GETDATE()
          WHERE CONVERT(VARCHAR(36), REQUEST_ID) COLLATE DATABASE_DEFAULT
              = CONVERT(VARCHAR(36), :id) COLLATE DATABASE_DEFAULT
@@ -1845,6 +1847,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
             cashDepositAmount: normalizedUpdate.CASH_DEPOSIT_AMOUNT,
             approvedTypeId: approvalUpdate.APPROVAL_TYPE_ID,
             updatedBy,
+            auditBy,
             approverId: pendingApproval.APPROVER_ID,
             pendingApprovalTypeId: PENDING_APPROVAL_TYPE_ID,
           },
@@ -1856,7 +1859,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
         requestId: id,
         approvalId: pendingApproval.ID,
         approvalStep: pendingApproval.APPROVAL_STEP,
-        updatedBy,
+        updatedBy: auditBy,
         pendingApprovalTypeId: PENDING_APPROVAL_TYPE_ID,
         approvedApprovalTypeId: approvalUpdate.APPROVAL_TYPE_ID,
         transaction,
@@ -1868,7 +1871,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
         {
           STATUS_ID: REJECTED_STATUS_ID,
           CANCELLED_NOTES: normalizedUpdate.DESCRIPTION,
-          UPDATED_BY: updatedBy,
+          UPDATED_BY: auditBy,
           UPDATED_DATE: Request.sequelize.fn('GETDATE'),
         },
         { where: { ID: id, ENABLED: true }, transaction },
@@ -1907,7 +1910,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
             APPROVED_NOTES: normalizedUpdate.DESCRIPTION,
             IS_PERMANENT_APPROVED: normalizedUpdate.IS_PERMANENT,
             IS_TEMPORARY_APPROVED: normalizedUpdate.IS_TEMPORARY,
-            UPDATED_BY: updatedBy,
+            UPDATED_BY: auditBy,
             UPDATED_DATE: Request.sequelize.fn('GETDATE'),
           },
           { where: { ID: id, ENABLED: true }, transaction },
@@ -1925,7 +1928,7 @@ async function processApprovalAction(id, action, payload, updatedBy, isSystemAdm
   }
 }
 
-async function processFinalAction(id, action, payload, updatedBy, isSystemAdmin = false) {
+async function processFinalAction(id, action, payload, updatedBy, isSystemAdmin = false, auditBy = updatedBy) {
   const comment = typeof payload?.DESCRIPTION === 'string' ? payload.DESCRIPTION.trim() : '';
   if (action === 'finalCancel' && !comment) {
     throw validationError('Comment is required when cancelling a final request.');
@@ -1986,7 +1989,7 @@ async function processFinalAction(id, action, payload, updatedBy, isSystemAdmin 
 
     const update = {
       STATUS_ID: action === 'finalConfirm' ? COMPLETED_STATUS_ID : CANCELLED_STATUS_ID,
-      UPDATED_BY: updatedBy,
+      UPDATED_BY: auditBy,
       UPDATED_DATE: Request.sequelize.fn('GETDATE'),
     };
 

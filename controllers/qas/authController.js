@@ -5,7 +5,7 @@ async function getCurrentUser(req, res, next) {
     const correlationId = res.locals.correlationId || 'N/A';
     const user = req.user;
     const profile = { ...(user.profile || {}) };
-    ['LOGGED_IN_CODE', 'LOGGED_IN_EMAIL', 'LOGGED_IN_ROLE', 'MAIN_CODE', 'MAIN_EMAIL']
+    ['LOGGED_IN_CODE', 'LOGGED_IN_EMAIL', 'LOGGED_IN_ROLE', 'LOGGED_IN_ROLE_ID', 'MAIN_CODE', 'MAIN_EMAIL']
       .forEach((field) => delete profile[field]);
 
     const userProfile = {

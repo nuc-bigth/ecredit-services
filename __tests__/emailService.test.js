@@ -89,6 +89,29 @@ describe('emailService', () => {
     }));
   });
 
+  test.each(['dev', 'qas'])('sends only to Main User in %s even when resend recipients are supplied', async (environment) => {
+    const transporter = createTransporter();
+    await createEmailService({ environment, transporter }).sendEmail({
+      template: 'request-completed',
+      subject: 'Workflow',
+      model,
+      recipients: { to: ['actual-recipient@example.com'], cc: ['copy@example.com'] },
+      effectiveRecipients: { to: ['previous-main@example.com'], cc: ['previous-copy@example.com'] },
+      actorEmail: 'token-main@example.com',
+      user: {
+        profile: {
+          LOGGED_IN_EMAIL: 'main@example.com',
+          EFFECTIVE_EMAIL: 'viewed@example.com',
+        },
+      },
+    });
+
+    expect(transporter.sendMail.mock.calls[0][0]).toEqual(expect.objectContaining({
+      to: ['main@example.com'],
+      cc: [],
+    }));
+  });
+
   test('does not add test recipient details to PRD template context', async () => {
     const transporter = createTransporter();
     await createEmailService({ environment: 'prd', transporter }).sendEmail({

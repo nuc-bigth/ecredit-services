@@ -26,7 +26,7 @@ async function propagateApprovedValues({
          BANK_GUARANTEE_AMOUNT = TB2.BANK_GUARANTEE_AMOUNT,
          IS_CASH_DEPOSIT = TB2.IS_CASH_DEPOSIT,
          CASH_DEPOSIT_AMOUNT = TB2.CASH_DEPOSIT_AMOUNT,
-         UPDATED_BY = :updatedBy,
+         UPDATED_BY = :auditBy,
          UPDATED_DATE = GETDATE()
      FROM APPROVALS AS TB1
      INNER JOIN APPROVALS AS TB2
@@ -58,7 +58,7 @@ async function propagateApprovedValues({
         requestId,
         approvalId,
         approvalStep,
-        updatedBy,
+        auditBy: updatedBy,
         pendingApprovalTypeId,
         approvedApprovalTypeId,
       },

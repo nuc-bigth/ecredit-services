@@ -3,6 +3,7 @@ const { Op, literal } = require('sequelize');
 const { getModels } = require('../models');
 const { formatThaiDateTime } = require('../helpers/thaiDateTime');
 const LOG_TYPE_IDS = require('../constants/logTypeIds');
+const { effectiveEmployeeCode, employeeCode: normalizeEmployeeCode } = require('../helpers/userIdentity');
 
 const MAX_DESCRIPTION_BYTES = 1024 * 1024;
 const SENSITIVE_KEY = /(password|token|secret|authorization|cookie|api[-_]?key)/i;
@@ -40,9 +41,10 @@ function parseDescription(description) {
   }
 }
 
-function employeeCode(user) {
-  const value = Number(user?.profile?.LOGGED_IN_CODE ?? user?.profile?.CODE);
-  return Number.isSafeInteger(value) ? value : null;
+function employeeCode(user, auditActorCode) {
+  return auditActorCode === undefined
+    ? effectiveEmployeeCode(user?.profile)
+    : normalizeEmployeeCode(auditActorCode);
 }
 
 function buildDescription({ status, environment, template, subject, baseSubject, recipients, bcc, model, providerResult, error, resendOf }) {
@@ -91,8 +93,8 @@ async function createEmailLog(payload) {
     CATEGORY: payload.template,
     CREATED_DATE: databaseNow,
     UPDATED_DATE: databaseNow,
-    CREATED_BY: employeeCode(payload.user),
-    UPDATED_BY: employeeCode(payload.user),
+    CREATED_BY: effectiveEmployeeCode(payload.user?.profile),
+    UPDATED_BY: employeeCode(payload.user, payload.auditActorCode),
     ENABLED: true,
     SORTING: 0,
   });
@@ -105,7 +107,7 @@ async function updateEmailLog(emailLog, payload) {
     DESCRIPTION: buildDescription(payload),
     LOG_TYPE_ID: logTypeId,
     UPDATED_DATE: Email.sequelize.literal('GETDATE()'),
-    UPDATED_BY: employeeCode(payload.user),
+    UPDATED_BY: employeeCode(payload.user, payload.auditActorCode),
   });
   return emailLog;
 }

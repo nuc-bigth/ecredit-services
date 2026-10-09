@@ -2,6 +2,7 @@ const logger = require('../../config/logger');
 const userService = require('../../services/userService');
 const permissionService = require('../../services/permissionService');
 const { isAdminRole } = require('../../helpers/roleAuthorization');
+const { effectiveEmployeeCode, mainEmployeeCode } = require('../../helpers/userIdentity');
 
 function requireSystemAdmin(req) {
   const profile = req.user?.profile;
@@ -22,7 +23,11 @@ function requireLoggedInSystemAdmin(req) {
 }
 
 function actorCode(req) {
-  return req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE;
+  return effectiveEmployeeCode(req.user?.profile);
+}
+
+function mainActorCode(req) {
+  return mainEmployeeCode(req.user?.profile);
 }
 
 function validatePermissionSelections(selections) {
@@ -92,7 +97,7 @@ async function updateUserPermissions(req, res, next) {
 async function setViewAs(req, res, next) {
   try {
     requireLoggedInSystemAdmin(req);
-    const updatedBy = actorCode(req);
+    const updatedBy = mainActorCode(req);
     if (!updatedBy) { const error = new Error('Authenticated user profile is missing an employee code.'); error.statusCode = 403; error.code = 'FORBIDDEN'; throw error; }
     await userService.setViewAs(updatedBy, req.params.code);
     logger.info('View As started', { correlationId: res.locals.correlationId, actorCode: updatedBy, targetCode: req.params.code });
@@ -103,7 +108,7 @@ async function setViewAs(req, res, next) {
 async function clearViewAs(req, res, next) {
   try {
     requireLoggedInSystemAdmin(req);
-    const updatedBy = actorCode(req);
+    const updatedBy = mainActorCode(req);
     if (!updatedBy) { const error = new Error('Authenticated user profile is missing an employee code.'); error.statusCode = 403; error.code = 'FORBIDDEN'; throw error; }
     await userService.clearViewAs(updatedBy);
     logger.info('View As cleared', { correlationId: res.locals.correlationId, actorCode: updatedBy });

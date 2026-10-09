@@ -1,6 +1,7 @@
 const logger = require('../../config/logger');
 const requestService = require('../../services/requestService');
 const { notifyBestEffort } = require('../../services/requestWorkflowNotificationService');
+const { effectiveEmployeeCode } = require('../../helpers/userIdentity');
 
 async function listRequests(req, res, next) {
   try {
@@ -58,7 +59,7 @@ async function getRequest(req, res, next) {
 async function updateRequestCustomerInfo(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = Number(req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE);
+    const updatedBy = effectiveEmployeeCode(req.user?.profile);
     if (!Number.isInteger(updatedBy)) {
       const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;
@@ -88,7 +89,7 @@ async function updateRequestCustomerInfo(req, res, next) {
 async function cancelRequest(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = Number(req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE);
+    const updatedBy = effectiveEmployeeCode(req.user?.profile);
     if (!Number.isInteger(updatedBy)) {
       const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;
@@ -109,8 +110,8 @@ async function cancelRequest(req, res, next) {
       event: 'cancel',
       requestId: req.params.id,
       environment: process.env.NODE_ENV,
-      actorEmail: req.user?.email,
-      actorName: req.user?.displayName,
+      actorEmail: req.user?.profile?.EMAIL || req.user?.email,
+      actorName: req.user?.profile?.FULL_NAME || req.user?.displayName,
       user: req.user,
     });
 

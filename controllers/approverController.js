@@ -1,5 +1,6 @@
 const approverService = require('../services/approverService');
 const { isAdminRole } = require('../helpers/roleAuthorization');
+const { effectiveEmployeeCode } = require('../helpers/userIdentity');
 
 function requireSystemAdmin(req) {
   const profile = req.user?.profile;
@@ -11,7 +12,7 @@ function requireSystemAdmin(req) {
 }
 
 function actorCode(req) {
-  return req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE;
+  return effectiveEmployeeCode(req.user?.profile);
 }
 
 function requireActorCode(req) {

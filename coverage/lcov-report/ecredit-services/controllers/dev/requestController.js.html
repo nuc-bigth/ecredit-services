@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/151</span>
+                <span class='fraction'>0/154</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/50</span>
+                <span class='fraction'>0/52</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/151</span>
+                <span class='fraction'>0/154</span>
             </div>
         
             
@@ -377,11 +377,16 @@
 <a name='L312'></a><a href='#L312'>312</a>
 <a name='L313'></a><a href='#L313'>313</a>
 <a name='L314'></a><a href='#L314'>314</a>
-<a name='L315'></a><a href='#L315'>315</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -555,6 +560,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -696,6 +702,8 @@ const requestService = <span class="cstat-no" title="statement not covered" >req
 const { getRequestEmailModel } = <span class="cstat-no" title="statement not covered" >require('../../services/requestEmailModelService');</span>
 const { sendRequestCompletedEmail } = <span class="cstat-no" title="statement not covered" >require('../../emails/requestCompletedEmail');</span>
 const { notifyBestEffort } = <span class="cstat-no" title="statement not covered" >require('../../services/requestWorkflowNotificationService');</span>
+const { isAdminRole } = <span class="cstat-no" title="statement not covered" >require('../../helpers/roleAuthorization');</span>
+const { effectiveEmployeeCode, approvalAuditEmployeeCode } = <span class="cstat-no" title="statement not covered" >require('../../helpers/userIdentity');</span>
 &nbsp;
 async function <span class="fstat-no" title="function not covered" >listRequests(</span>req, res, next) {
 <span class="cstat-no" title="statement not covered" >  try {</span>
@@ -753,7 +761,7 @@ async function <span class="fstat-no" title="function not covered" >getRequest(<
 async function <span class="fstat-no" title="function not covered" >updateRequestCustomerInfo(</span>req, res, next) {
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const correlationId = <span class="cstat-no" title="statement not covered" >res.locals.correlationId || 'N/A';</span>
-    const updatedBy = <span class="cstat-no" title="statement not covered" >Number(req.user?.profile?.CODE);</span>
+    const updatedBy = <span class="cstat-no" title="statement not covered" >effectiveEmployeeCode(req.user?.profile);</span>
 <span class="cstat-no" title="statement not covered" >    if (!Number.isInteger(updatedBy)) {</span>
       const error = <span class="cstat-no" title="statement not covered" >new Error('Authenticated user profile is missing a numeric employee code.');</span>
 <span class="cstat-no" title="statement not covered" >      error.statusCode = 403;</span>
@@ -783,7 +791,7 @@ async function <span class="fstat-no" title="function not covered" >updateReques
 async function <span class="fstat-no" title="function not covered" >updateRequestCreditSuggestion(</span>req, res, next) {
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const correlationId = <span class="cstat-no" title="statement not covered" >res.locals.correlationId || 'N/A';</span>
-    const updatedBy = <span class="cstat-no" title="statement not covered" >Number(req.user?.profile?.CODE);</span>
+    const updatedBy = <span class="cstat-no" title="statement not covered" >effectiveEmployeeCode(req.user?.profile);</span>
 <span class="cstat-no" title="statement not covered" >    if (!Number.isInteger(updatedBy)) {</span>
       const error = <span class="cstat-no" title="statement not covered" >new Error('Authenticated user profile is missing a numeric employee code.');</span>
 <span class="cstat-no" title="statement not covered" >      error.statusCode = 403;</span>
@@ -813,7 +821,7 @@ async function <span class="fstat-no" title="function not covered" >updateReques
 async function <span class="fstat-no" title="function not covered" >updateRequestScoringAndPayment(</span>req, res, next) {
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const correlationId = <span class="cstat-no" title="statement not covered" >res.locals.correlationId || 'N/A';</span>
-    const updatedBy = <span class="cstat-no" title="statement not covered" >Number(req.user?.profile?.CODE);</span>
+    const updatedBy = <span class="cstat-no" title="statement not covered" >effectiveEmployeeCode(req.user?.profile);</span>
 <span class="cstat-no" title="statement not covered" >    if (!Number.isInteger(updatedBy)) {</span>
       const error = <span class="cstat-no" title="statement not covered" >new Error('Authenticated user profile is missing a numeric employee code.');</span>
 <span class="cstat-no" title="statement not covered" >      error.statusCode = 403;</span>
@@ -843,7 +851,7 @@ async function <span class="fstat-no" title="function not covered" >updateReques
 async function <span class="fstat-no" title="function not covered" >updateRequestRequestedDetails(</span>req, res, next) {
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const correlationId = <span class="cstat-no" title="statement not covered" >res.locals.correlationId || 'N/A';</span>
-    const updatedBy = <span class="cstat-no" title="statement not covered" >Number(req.user?.profile?.CODE);</span>
+    const updatedBy = <span class="cstat-no" title="statement not covered" >effectiveEmployeeCode(req.user?.profile);</span>
 <span class="cstat-no" title="statement not covered" >    if (!Number.isInteger(updatedBy)) {</span>
       const error = <span class="cstat-no" title="statement not covered" >new Error('Authenticated user profile is missing a numeric employee code.');</span>
 <span class="cstat-no" title="statement not covered" >      error.statusCode = 403;</span>
@@ -871,15 +879,16 @@ async function <span class="fstat-no" title="function not covered" >updateReques
 async function <span class="fstat-no" title="function not covered" >saveFinalApproval(</span>req, res, next) {
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const correlationId = <span class="cstat-no" title="statement not covered" >res.locals.correlationId || 'N/A';</span>
-    const updatedBy = <span class="cstat-no" title="statement not covered" >Number(req.user?.profile?.CODE);</span>
-    const isSystemAdmin = <span class="cstat-no" title="statement not covered" >req.user?.profile?.ROLE_ID === 'd854d840-d18c-4a7d-87c1-a9186f8664e5';</span>
-<span class="cstat-no" title="statement not covered" >    if (!Number.isInteger(updatedBy)) {</span>
+    const updatedBy = <span class="cstat-no" title="statement not covered" >effectiveEmployeeCode(req.user?.profile);</span>
+    const auditBy = <span class="cstat-no" title="statement not covered" >approvalAuditEmployeeCode(req.user?.profile);</span>
+    const isSystemAdmin = <span class="cstat-no" title="statement not covered" >isAdminRole(req.user?.profile?.ROLE, req.user?.profile?.ROLE_ID);</span>
+<span class="cstat-no" title="statement not covered" >    if (!Number.isInteger(updatedBy) || !Number.isInteger(auditBy)) {</span>
       const error = <span class="cstat-no" title="statement not covered" >new Error('Authenticated user profile is missing a numeric employee code.');</span>
 <span class="cstat-no" title="statement not covered" >      error.statusCode = 403;</span>
 <span class="cstat-no" title="statement not covered" >      error.code = 'FORBIDDEN';</span>
 <span class="cstat-no" title="statement not covered" >      throw error;</span>
     }
-    const request = <span class="cstat-no" title="statement not covered" >await requestService.saveFinalApproval(req.params.id, req.body, updatedBy, isSystemAdmin);</span>
+    const request = <span class="cstat-no" title="statement not covered" >await requestService.saveFinalApproval(req.params.id, req.body, updatedBy, isSystemAdmin, auditBy);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(200).json({ success: true, data: request, correlationId });</span>
   } catch (error) {
 <span class="cstat-no" title="statement not covered" >    logger.error(`Error in saveFinalApproval: ${error.message}`, {</span>
@@ -894,7 +903,7 @@ async function <span class="fstat-no" title="function not covered" >saveFinalApp
 async function <span class="fstat-no" title="function not covered" >cloneRequestData(</span>req, res, next) {
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const correlationId = <span class="cstat-no" title="statement not covered" >res.locals.correlationId || 'N/A';</span>
-    const updatedBy = <span class="cstat-no" title="statement not covered" >Number(req.user?.profile?.CODE);</span>
+    const updatedBy = <span class="cstat-no" title="statement not covered" >effectiveEmployeeCode(req.user?.profile);</span>
 <span class="cstat-no" title="statement not covered" >    if (!Number.isInteger(updatedBy)) {</span>
       const error = <span class="cstat-no" title="statement not covered" >new Error('Authenticated user profile is missing a numeric employee code.');</span>
 <span class="cstat-no" title="statement not covered" >      error.statusCode = 403;</span>
@@ -922,7 +931,7 @@ async function <span class="fstat-no" title="function not covered" >cloneRequest
 async function <span class="fstat-no" title="function not covered" >cancelRequest(</span>req, res, next) {
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const correlationId = <span class="cstat-no" title="statement not covered" >res.locals.correlationId || 'N/A';</span>
-    const updatedBy = <span class="cstat-no" title="statement not covered" >Number(req.user?.profile?.CODE);</span>
+    const updatedBy = <span class="cstat-no" title="statement not covered" >effectiveEmployeeCode(req.user?.profile);</span>
 <span class="cstat-no" title="statement not covered" >    if (!Number.isInteger(updatedBy)) {</span>
       const error = <span class="cstat-no" title="statement not covered" >new Error('Authenticated user profile is missing a numeric employee code.');</span>
 <span class="cstat-no" title="statement not covered" >      error.statusCode = 403;</span>
@@ -1012,7 +1021,7 @@ async function <span class="fstat-no" title="function not covered" >sendTestEmai
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-10-08T08:30:01.479Z
+                at 2026-10-09T09:30:05.292Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

@@ -26,6 +26,26 @@ describe('emailLogService', () => {
     expect(Email.create).toHaveBeenCalledWith(expect.objectContaining({ LOG_TYPE_ID: logTypeId }));
   });
 
+  test('records the effective user as creator and the supplied audit actor as updater', async () => {
+    const Email = {
+      sequelize: { literal: jest.fn((value) => value) },
+      create: jest.fn().mockResolvedValue({}),
+    };
+    getModels.mockReturnValue({ Email });
+
+    await createEmailLog({
+      status: 'PENDING',
+      subject: 'Subject',
+      user: { profile: { CODE: '20261631', EFFECTIVE_CODE: '20261631', LOGGED_IN_CODE: '20221459' } },
+      auditActorCode: 20221459,
+    });
+
+    expect(Email.create).toHaveBeenCalledWith(expect.objectContaining({
+      CREATED_BY: 20261631,
+      UPDATED_BY: 20221459,
+    }));
+  });
+
   test.each([
     ['PENDING', '69bd78f0-a012-4d47-bfed-4c0abd316877'],
     ['SENT', '23556cea-337f-475c-9b6a-830bfa08ab93'],

@@ -10,6 +10,7 @@ function sendRequestWorkflowEmail({
   transporter,
   requestId,
   user,
+  auditActorCode,
 }) {
   return createEmailService({ environment, transporter }).sendEmail({
     template,
@@ -20,6 +21,7 @@ function sendRequestWorkflowEmail({
     actorEmail,
     requestId,
     user,
+    auditActorCode,
   });
 }
 

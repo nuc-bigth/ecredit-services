@@ -4,6 +4,7 @@ const { getRequestEmailModel } = require('../../services/requestEmailModelServic
 const { sendRequestCompletedEmail } = require('../../emails/requestCompletedEmail');
 const { notifyBestEffort } = require('../../services/requestWorkflowNotificationService');
 const { isAdminRole } = require('../../helpers/roleAuthorization');
+const { effectiveEmployeeCode, approvalAuditEmployeeCode } = require('../../helpers/userIdentity');
 
 async function listRequests(req, res, next) {
   try {
@@ -61,7 +62,7 @@ async function getRequest(req, res, next) {
 async function updateRequestCustomerInfo(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = Number(req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE);
+    const updatedBy = effectiveEmployeeCode(req.user?.profile);
     if (!Number.isInteger(updatedBy)) {
       const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;
@@ -91,7 +92,7 @@ async function updateRequestCustomerInfo(req, res, next) {
 async function updateRequestCreditSuggestion(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = Number(req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE);
+    const updatedBy = effectiveEmployeeCode(req.user?.profile);
     if (!Number.isInteger(updatedBy)) {
       const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;
@@ -121,7 +122,7 @@ async function updateRequestCreditSuggestion(req, res, next) {
 async function updateRequestScoringAndPayment(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = Number(req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE);
+    const updatedBy = effectiveEmployeeCode(req.user?.profile);
     if (!Number.isInteger(updatedBy)) {
       const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;
@@ -151,7 +152,7 @@ async function updateRequestScoringAndPayment(req, res, next) {
 async function updateRequestRequestedDetails(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = Number(req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE);
+    const updatedBy = effectiveEmployeeCode(req.user?.profile);
     if (!Number.isInteger(updatedBy)) {
       const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;
@@ -179,15 +180,16 @@ async function updateRequestRequestedDetails(req, res, next) {
 async function saveFinalApproval(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = Number(req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE);
+    const updatedBy = effectiveEmployeeCode(req.user?.profile);
+    const auditBy = approvalAuditEmployeeCode(req.user?.profile);
     const isSystemAdmin = isAdminRole(req.user?.profile?.ROLE, req.user?.profile?.ROLE_ID);
-    if (!Number.isInteger(updatedBy)) {
+    if (!Number.isInteger(updatedBy) || !Number.isInteger(auditBy)) {
       const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;
       error.code = 'FORBIDDEN';
       throw error;
     }
-    const request = await requestService.saveFinalApproval(req.params.id, req.body, updatedBy, isSystemAdmin);
+    const request = await requestService.saveFinalApproval(req.params.id, req.body, updatedBy, isSystemAdmin, auditBy);
     res.status(200).json({ success: true, data: request, correlationId });
   } catch (error) {
     logger.error(`Error in saveFinalApproval: ${error.message}`, {
@@ -202,7 +204,7 @@ async function saveFinalApproval(req, res, next) {
 async function cloneRequestData(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = Number(req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE);
+    const updatedBy = effectiveEmployeeCode(req.user?.profile);
     if (!Number.isInteger(updatedBy)) {
       const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;
@@ -230,7 +232,7 @@ async function cloneRequestData(req, res, next) {
 async function cancelRequest(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = Number(req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE);
+    const updatedBy = effectiveEmployeeCode(req.user?.profile);
     if (!Number.isInteger(updatedBy)) {
       const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;
@@ -251,8 +253,8 @@ async function cancelRequest(req, res, next) {
       event: 'cancel',
       requestId: req.params.id,
       environment: process.env.NODE_ENV,
-      actorEmail: req.user?.email,
-      actorName: req.user?.displayName,
+      actorEmail: req.user?.profile?.EMAIL || req.user?.email,
+      actorName: req.user?.profile?.FULL_NAME || req.user?.displayName,
       user: req.user,
     });
 
@@ -281,7 +283,7 @@ async function sendTestEmail(req, res, next) {
       environment: process.env.NODE_ENV,
       emailModel,
       subject: 'Test Email',
-      actorEmail: req.user?.email,
+      actorEmail: req.user?.profile?.EMAIL || req.user?.email,
       recipients: {
         to: req.body?.to,
         cc: req.body?.cc,
