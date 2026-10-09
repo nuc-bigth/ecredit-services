@@ -1,4 +1,5 @@
-const { Op, fn } = require('sequelize');
+const { Op, fn, QueryTypes } = require('sequelize');
+const { getDatabase } = require('../config/database');
 const { getModels } = require('../models');
 
 const SORT_FIELDS = {
@@ -63,11 +64,17 @@ function isEnabled(value) {
   return value === true || value === 1 || value === '1';
 }
 
+function byRoleLevel(a, b) {
+  const level = (userRole) => Number(userRole.role?.LEVEL ?? Number.MAX_SAFE_INTEGER);
+  return level(a) - level(b) || String(a.role?.NAME || '').localeCompare(String(b.role?.NAME || ''));
+}
+
 function mapUser(employee) {
   const user = employee.user;
   const costCenter = user?.costCenter;
-  const roles = (user?.userRoles || [])
+  const roles = [...(user?.userRoles || [])]
     .filter((userRole) => isEnabled(userRole.ENABLED))
+    .sort(byRoleLevel)
     .map((userRole) => userRole.role.NAME)
     .filter(Boolean);
 
@@ -89,8 +96,10 @@ function mapUser(employee) {
 function mapUserDetail(employee) {
   const user = employee.user;
   const costCenter = user?.costCenter;
-  const roles = (user?.userRoles || [])
+  const activeUserRoles = [...(user?.userRoles || [])]
     .filter((userRole) => isEnabled(userRole.ENABLED) && isEnabled(userRole.role?.ENABLED))
+    .sort(byRoleLevel);
+  const roles = activeUserRoles
     .map((userRole) => userRole.role.NAME)
     .filter(Boolean);
 
@@ -98,6 +107,7 @@ function mapUserDetail(employee) {
     CODE: employee.EMP_CODE,
     ROLE: roles[0] || null,
     ROLES: [...new Set(roles)],
+    ROLE_IDS: [...new Set(activeUserRoles.map((userRole) => String(userRole.ROLE_ID)))],
     BU: costCenter?.BU || '',
     DEPARTMENT: costCenter?.DEPARTMENT || '',
     USERNAME: employee.USERNAME || '',
@@ -199,4 +209,158 @@ async function clearViewAs(actorCode) {
   );
 }
 
-module.exports = { listUsers, getUserDetail, setSystemActive, setViewAs, clearViewAs };
+function serviceError(message, statusCode, code) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.code = code;
+  return error;
+}
+
+async function listAvailableEmployees(search = '') {
+  const value = typeof search === 'string' ? search.trim() : '';
+  const rows = await getDatabase().query(
+    `SELECT TOP 100 E.EMP_CODE AS CODE, E.NAME_ENG AS NAME, CONCAT(E.INITIALS, '-', E.USERNAME) AS [USER], E.CURRENT_EMAIL AS EMAIL
+     FROM S_EMPLOYEE1 AS E
+     WHERE E.WORK_STATUS = '3'
+       AND NOT EXISTS (SELECT 1 FROM USERS AS U WHERE U.ID = E.EMP_CODE)
+       AND (:search = '' OR E.EMP_CODE LIKE :pattern OR E.NAME_ENG LIKE :pattern OR E.USERNAME LIKE :pattern OR E.CURRENT_EMAIL LIKE :pattern)
+     ORDER BY E.NAME_ENG ASC, E.EMP_CODE ASC`,
+    { replacements: { search: value, pattern: `%${value}%` }, type: QueryTypes.SELECT },
+  );
+  return rows.map((row) => ({ CODE: String(row.CODE), NAME: row.NAME || '', USER: row.USER || '', EMAIL: (row.EMAIL || '').toLowerCase() }));
+}
+
+async function listRoleOptions() {
+  const { Role, RolePermission } = getModels();
+  const [roles, links] = await Promise.all([
+    Role.findAll({ where: { ENABLED: { [Op.in]: ['1', 1, true] } }, order: [['LEVEL', 'ASC'], ['NAME', 'ASC']] }),
+    RolePermission.findAll({ where: { ENABLED: '1' }, attributes: ['ROLE_ID', 'PERMISSION_ID'], raw: true }),
+  ]);
+  return roles.map((role) => ({
+    ID: String(role.ID),
+    NAME: role.NAME,
+    PERMISSION_IDS: [...new Set(links.filter((link) => String(link.ROLE_ID) === String(role.ID)).map((link) => String(link.PERMISSION_ID)))],
+  }));
+}
+
+async function listPermissionOptions() {
+  const { Permission } = getModels();
+  const permissions = await Permission.findAll({ where: { ENABLED: '1' }, order: [['SORTING', 'ASC'], ['NAME', 'ASC']] });
+  return permissions.map((permission) => ({ ID: String(permission.ID), NAME: permission.NAME }));
+}
+
+async function resolveAccessSelection(roleIds, permissionIds) {
+  const { Role, RolePermission, Permission } = getModels();
+  const uniqueRoleIds = [...new Set(roleIds.map(String))];
+  const roles = await Role.findAll({ where: { ID: { [Op.in]: uniqueRoleIds } } });
+  const activeRoleIds = new Set(roles.filter((role) => isEnabled(role.ENABLED)).map((role) => String(role.ID)));
+  if (uniqueRoleIds.some((roleId) => !activeRoleIds.has(roleId))) {
+    throw serviceError('One or more selected roles were not found or are disabled.', 400, 'VALIDATION_ERROR');
+  }
+  const rolePermissions = await RolePermission.findAll({
+    where: { ROLE_ID: { [Op.in]: uniqueRoleIds }, ENABLED: '1' },
+    attributes: ['PERMISSION_ID'],
+    raw: true,
+  });
+  const defaultPermissionIds = new Set(rolePermissions.map((permission) => String(permission.PERMISSION_ID)));
+  const selectedPermissionIds = new Set(permissionIds.map(String));
+  if ([...selectedPermissionIds].some((permissionId) => !defaultPermissionIds.has(permissionId))) {
+    throw serviceError('Selected permissions must be included in the defaults of the assigned roles.', 400, 'VALIDATION_ERROR');
+  }
+  const activePermissions = await Permission.findAll({
+    where: { ENABLED: '1' },
+    attributes: ['ID'],
+    raw: true,
+  });
+  const activePermissionIds = new Set(activePermissions.map((permission) => String(permission.ID)));
+  if ([...selectedPermissionIds].some((permissionId) => !activePermissionIds.has(permissionId))) {
+    throw serviceError('One or more selected permissions were not found or are disabled.', 400, 'VALIDATION_ERROR');
+  }
+  return { uniqueRoleIds, selectedPermissionIds, activePermissionIds };
+}
+
+async function createUser(employeeCode, roleIds, permissionIds, enabled, actorCode) {
+  const { Employee, User, UserPermission } = getModels();
+  if (!(await Employee.findByPk(employeeCode))) throw serviceError('The selected employee was not found.', 400, 'VALIDATION_ERROR');
+  if (await User.findByPk(employeeCode)) throw serviceError('This employee is already a user.', 409, 'DUPLICATE_USER');
+  const { uniqueRoleIds, selectedPermissionIds, activePermissionIds } = await resolveAccessSelection(roleIds, permissionIds);
+
+  const database = getDatabase();
+  await database.transaction(async (transaction) => {
+    await database.query(
+      `INSERT INTO USER_SETTINGS (ID, ENABLED, CREATED_DATE, CREATED_BY, UPDATED_DATE, UPDATED_BY)
+       VALUES (:employeeCode, :enabled, GETDATE(), :actorCode, GETDATE(), :actorCode)`,
+      { replacements: { employeeCode, enabled: enabled ? '1' : '0', actorCode }, type: QueryTypes.INSERT, transaction },
+    );
+    await database.query(
+      `INSERT INTO USERS (ID, ENABLED, CREATED_DATE, CREATED_BY, UPDATED_DATE, UPDATED_BY)
+       VALUES (:employeeCode, :enabled, GETDATE(), :actorCode, GETDATE(), :actorCode)`,
+      { replacements: { employeeCode, enabled: enabled ? '1' : '0', actorCode }, type: QueryTypes.INSERT, transaction },
+    );
+    for (const roleId of uniqueRoleIds) {
+      await database.query(
+        `INSERT INTO USER_ROLES (ID, NAME, DESCRIPTION, USER_ID, ROLE_ID, ENABLED) VALUES (NEWID(), '-', '-', :employeeCode, :roleId, '1')`,
+        { replacements: { employeeCode, roleId }, type: QueryTypes.INSERT, transaction },
+      );
+    }
+    await UserPermission.bulkCreate(
+      [...activePermissionIds].map((permissionId) => ({
+        USER_ID: employeeCode,
+        PERMISSION_ID: permissionId,
+        ENABLED: selectedPermissionIds.has(permissionId) ? '1' : '0',
+      })),
+      { transaction },
+    );
+  });
+  return getUserDetail(employeeCode);
+}
+
+async function updateUserAccess(employeeCode, roleIds, permissionIds, enabled, actorCode) {
+  const { User, UserPermission } = getModels();
+  if (!(await User.findByPk(employeeCode))) throw serviceError(`User ${employeeCode} was not found.`, 404, 'RESOURCE_NOT_FOUND');
+  const { uniqueRoleIds, selectedPermissionIds, activePermissionIds } = await resolveAccessSelection(roleIds, permissionIds);
+
+  const database = getDatabase();
+  await database.transaction(async (transaction) => {
+    await User.update(
+      { ENABLED: enabled ? '1' : '0', UPDATED_DATE: fn('GETDATE'), UPDATED_BY: actorCode },
+      { where: { ID: employeeCode }, transaction },
+    );
+
+    const existingRoles = await database.query(
+      'SELECT ROLE_ID FROM USER_ROLES WHERE USER_ID = :employeeCode',
+      { replacements: { employeeCode }, type: QueryTypes.SELECT, transaction },
+    );
+    const existingRoleIds = new Set(existingRoles.map((row) => String(row.ROLE_ID)));
+    await database.query(
+      'UPDATE USER_ROLES SET ENABLED = 0 WHERE USER_ID = :employeeCode',
+      { replacements: { employeeCode }, type: QueryTypes.UPDATE, transaction },
+    );
+    for (const roleId of uniqueRoleIds) {
+      if (existingRoleIds.has(roleId)) {
+        await database.query(
+          'UPDATE USER_ROLES SET ENABLED = 1 WHERE USER_ID = :employeeCode AND ROLE_ID = :roleId',
+          { replacements: { employeeCode, roleId }, type: QueryTypes.UPDATE, transaction },
+        );
+      } else {
+        await database.query(
+          `INSERT INTO USER_ROLES (ID, NAME, DESCRIPTION, USER_ID, ROLE_ID, ENABLED) VALUES (NEWID(), '-', '-', :employeeCode, :roleId, '1')`,
+          { replacements: { employeeCode, roleId }, type: QueryTypes.INSERT, transaction },
+        );
+      }
+    }
+
+    const existingPermissions = await UserPermission.findAll({ where: { USER_ID: employeeCode }, transaction });
+    const existingPermissionIds = new Set(existingPermissions.map((permission) => String(permission.PERMISSION_ID)));
+    for (const permissionId of activePermissionIds) {
+      const values = { ENABLED: selectedPermissionIds.has(permissionId) ? '1' : '0' };
+      if (existingPermissionIds.has(permissionId)) {
+        await UserPermission.update(values, { where: { USER_ID: employeeCode, PERMISSION_ID: permissionId }, transaction });
+      } else {
+        await UserPermission.create({ USER_ID: employeeCode, PERMISSION_ID: permissionId, ...values }, { transaction });
+      }
+    }
+  });
+  return getUserDetail(employeeCode);
+}
+module.exports = { listUsers, getUserDetail, setSystemActive, setViewAs, clearViewAs, listAvailableEmployees, listRoleOptions, listPermissionOptions, createUser, updateUserAccess };

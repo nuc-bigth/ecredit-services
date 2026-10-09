@@ -138,7 +138,8 @@ function createEmailService({ environment = config.environment, bcc = config.ema
     if (missingValue(subject)) throw new Error('subject is required.');
 
     const resolvedTemplate = resolveTemplate(template);
-    const resolvedRecipients = effectiveRecipients || resolveRecipients(normalizedEnvironment, recipients, actorEmail, bcc);
+    const resolveActorEmail = normalizedEnvironment === 'prd' ? actorEmail : (user?.profile?.LOGGED_IN_EMAIL || actorEmail);
+    const resolvedRecipients = effectiveRecipients || resolveRecipients(normalizedEnvironment, recipients, resolveActorEmail, bcc);
     const bccRecipients = effectiveBcc || normalizeEmailList(bcc, 'bcc');
     if (!bccRecipients.length) throw new Error('EMAIL_BCC is required.');
 

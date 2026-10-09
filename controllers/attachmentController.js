@@ -3,7 +3,7 @@ const attachmentUpload = require('../middlewares/attachmentUpload');
 const attachmentService = require('../services/attachmentService');
 
 function requireUpdater(req) {
-  const updatedBy = req.user?.profile?.CODE;
+  const updatedBy = req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE;
   const employeeId = Number(updatedBy);
   if (Number.isSafeInteger(employeeId)) return employeeId;
 

@@ -66,7 +66,7 @@ async function listEnabledSizes(req, res, next) {
 async function updateCustomer(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = req.user?.profile?.CODE;
+    const updatedBy = req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE;
     if (!updatedBy) {
       const error = new Error('Authenticated user profile is missing an employee code.');
       error.statusCode = 403;
@@ -91,7 +91,7 @@ async function updateCustomer(req, res, next) {
 async function deleteCustomer(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = req.user?.profile?.CODE;
+    const updatedBy = req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE;
     if (!updatedBy) {
       const error = new Error('Authenticated user profile is missing an employee code.');
       error.statusCode = 403;

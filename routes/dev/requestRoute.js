@@ -6,9 +6,11 @@ const eventLogController = require('../../controllers/eventLogController');
 const approvalHistoryController = require('../../controllers/approvalHistoryController');
 const requestMetadataController = require('../../controllers/requestMetadataController');
 const emailController = require('../../controllers/emailController');
+const crmSimulationController = require('../../controllers/crmSimulationController');
 
 const router = express.Router();
 
+router.post('/simulate-crm-request', authenticationMiddleware, crmSimulationController.simulateCrmRequest);
 router.get('/', authenticationMiddleware, requestController.listRequests);
 router.get('/statuses', authenticationMiddleware, requestMetadataController.listEnabledStatuses);
 router.get('/log-types', authenticationMiddleware, requestMetadataController.listEnabledLogTypes);

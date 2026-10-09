@@ -58,7 +58,7 @@ async function getRequest(req, res, next) {
 async function updateRequestCustomerInfo(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = Number(req.user?.profile?.CODE);
+    const updatedBy = Number(req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE);
     if (!Number.isInteger(updatedBy)) {
       const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;
@@ -88,7 +88,7 @@ async function updateRequestCustomerInfo(req, res, next) {
 async function cancelRequest(req, res, next) {
   try {
     const correlationId = res.locals.correlationId || 'N/A';
-    const updatedBy = Number(req.user?.profile?.CODE);
+    const updatedBy = Number(req.user?.profile?.LOGGED_IN_CODE || req.user?.profile?.CODE);
     if (!Number.isInteger(updatedBy)) {
       const error = new Error('Authenticated user profile is missing a numeric employee code.');
       error.statusCode = 403;

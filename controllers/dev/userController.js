@@ -80,7 +80,7 @@ async function updateUserPermissions(req, res, next) {
     if (!validatePermissionSelections(selections)) { const error = new Error('Request body must include a non-empty "permissions" array of { NAME, GRANTED } items.'); error.statusCode = 400; error.code = 'VALIDATION_ERROR'; throw error; }
     const user = await userService.getUserDetail(req.params.code);
     if (!user) { const error = new Error(`User ${req.params.code} was not found.`); error.statusCode = 404; error.code = 'RESOURCE_NOT_FOUND'; throw error; }
-    const permissions = await permissionService.updateRolePermissions(req.params.code, selections);
+    const permissions = await permissionService.updateUserPermissionOverrides(req.params.code, selections);
     logger.info('User permissions updated', { correlationId: res.locals.correlationId, actorCode: actorCode(req), targetCode: req.params.code, count: selections.length });
     res.status(200).json({ success: true, data: { permissions }, correlationId: res.locals.correlationId || 'N/A' });
   } catch (error) { next(error); }
@@ -108,4 +108,67 @@ async function clearViewAs(req, res, next) {
   } catch (error) { next(error); }
 }
 
-module.exports = { listUsers, updateSystemActive, getUserDetail, getUserPermissions, updateUserPermissions, setViewAs, clearViewAs };
+async function listEmployeeOptions(req, res, next) {
+  try {
+    requireSystemAdmin(req);
+    const data = await userService.listAvailableEmployees(req.query.search);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.status(200).json({ success: true, data, correlationId: res.locals.correlationId || 'N/A' });
+  } catch (error) { next(error); }
+}
+
+async function listRoleOptions(req, res, next) {
+  try {
+    requireSystemAdmin(req);
+    const data = await userService.listRoleOptions();
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.status(200).json({ success: true, data, correlationId: res.locals.correlationId || 'N/A' });
+  } catch (error) { next(error); }
+}
+
+async function listPermissionOptions(req, res, next) {
+  try {
+    requireSystemAdmin(req);
+    const data = await userService.listPermissionOptions();
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.status(200).json({ success: true, data, correlationId: res.locals.correlationId || 'N/A' });
+  } catch (error) { next(error); }
+}
+
+async function createUser(req, res, next) {
+  try {
+    requireSystemAdmin(req);
+    const employeeCode = String(req.body?.employeeCode ?? '').trim();
+    const roleIds = req.body?.roleIds;
+    const permissionIds = req.body?.permissionIds;
+    const invalid = (message) => { const error = new Error(message); error.statusCode = 400; error.code = 'VALIDATION_ERROR'; return error; };
+    if (!employeeCode) throw invalid('employeeCode is required.');
+    if (!Array.isArray(roleIds) || !roleIds.length || !roleIds.every((id) => typeof id === 'string' && id.trim())) throw invalid('roleIds must be a non-empty array of role IDs.');
+    if (!Array.isArray(permissionIds) || !permissionIds.every((id) => typeof id === 'string' && id.trim())) throw invalid('permissionIds must be an array of permission IDs.');
+    if (typeof req.body?.enabled !== 'boolean') throw invalid('enabled must be a boolean.');
+    const createdBy = actorCode(req);
+    if (!createdBy) { const error = new Error('Authenticated user profile is missing an employee code.'); error.statusCode = 403; error.code = 'FORBIDDEN'; throw error; }
+    const data = await userService.createUser(employeeCode, roleIds, permissionIds, req.body.enabled, createdBy);
+    logger.info('User created', { correlationId: res.locals.correlationId, actorCode: createdBy, targetCode: employeeCode, roleIds, permissionCount: permissionIds.length });
+    res.status(201).json({ success: true, data, correlationId: res.locals.correlationId || 'N/A' });
+  } catch (error) { next(error); }
+}
+
+async function updateUserAccess(req, res, next) {
+  try {
+    requireSystemAdmin(req);
+    const roleIds = req.body?.roleIds;
+    const permissionIds = req.body?.permissionIds;
+    const invalid = (message) => { const error = new Error(message); error.statusCode = 400; error.code = 'VALIDATION_ERROR'; return error; };
+    if (!Array.isArray(roleIds) || !roleIds.length || !roleIds.every((id) => typeof id === 'string' && id.trim())) throw invalid('roleIds must be a non-empty array of role IDs.');
+    if (!Array.isArray(permissionIds) || !permissionIds.every((id) => typeof id === 'string' && id.trim())) throw invalid('permissionIds must be an array of permission IDs.');
+    if (typeof req.body?.enabled !== 'boolean') throw invalid('enabled must be a boolean.');
+    const updatedBy = actorCode(req);
+    if (!updatedBy) { const error = new Error('Authenticated user profile is missing an employee code.'); error.statusCode = 403; error.code = 'FORBIDDEN'; throw error; }
+    const data = await userService.updateUserAccess(req.params.code, roleIds, permissionIds, req.body.enabled, updatedBy);
+    logger.info('User access updated', { correlationId: res.locals.correlationId, actorCode: updatedBy, targetCode: req.params.code, roleIds, permissionCount: permissionIds.length });
+    res.status(200).json({ success: true, data, correlationId: res.locals.correlationId || 'N/A' });
+  } catch (error) { next(error); }
+}
+
+module.exports = { listUsers, updateSystemActive, getUserDetail, getUserPermissions, updateUserPermissions, setViewAs, clearViewAs, listEmployeeOptions, listRoleOptions, listPermissionOptions, createUser, updateUserAccess };

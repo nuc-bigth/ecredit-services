@@ -1,15 +1,16 @@
 const { DataTypes } = require('sequelize');
 
-// USER_ROLES: no dedicated ID column is used by the source query, so USER_ID is
-// treated as the primary key here for read-only Sequelize access.
+// A user can have several roles, so USER_ID cannot be the primary key
+// (Sequelize would collapse included rows that share the same key).
 module.exports = (sequelize) =>
   sequelize.define(
     'UserRole',
     {
-      USER_ID: {
+      ID: {
         type: DataTypes.STRING,
         primaryKey: true,
       },
+      USER_ID: DataTypes.STRING,
       ROLE_ID: DataTypes.STRING,
       ENABLED: DataTypes.STRING,
     },
