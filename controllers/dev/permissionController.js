@@ -1,5 +1,6 @@
 const logger = require('../../config/logger');
 const permissionService = require('../../services/permissionService');
+const { isAdminRole } = require('../../helpers/roleAuthorization');
 
 function isValidSelection(selection) {
   return (
@@ -11,11 +12,12 @@ function isValidSelection(selection) {
 }
 
 function requireSystemAdmin(req) {
-  if (req.user?.profile?.ROLE === 'System Admin') {
+  const profile = req.user?.profile;
+  if (isAdminRole(profile?.ROLE, profile?.ROLE_ID)) {
     return;
   }
 
-  const error = new Error('Only the System Admin role can update permissions.');
+  const error = new Error('Only the System Admin or Super Admin role can update permissions.');
   error.statusCode = 403;
   error.code = 'FORBIDDEN';
   throw error;

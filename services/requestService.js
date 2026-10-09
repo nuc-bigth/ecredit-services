@@ -1596,7 +1596,7 @@ async function saveFinalApproval(id, payload, updatedBy, isSystemAdmin = false) 
       },
     );
     if (!permissionRows[0]) {
-      const error = new Error('Only a BDS Review approver or System Admin can save final approval data.');
+      const error = new Error('Only a BDS Review approver, System Admin, or Super Admin can save final approval data.');
       error.statusCode = 403;
       error.code = 'FORBIDDEN';
       throw error;
@@ -1978,7 +1978,7 @@ async function processFinalAction(id, action, payload, updatedBy, isSystemAdmin 
       },
     );
     if (!permissionRows[0]) {
-      const error = new Error('Only a BDS Review approver or System Admin can complete this request.');
+      const error = new Error('Only a BDS Review approver, System Admin, or Super Admin can complete this request.');
       error.statusCode = 403;
       error.code = 'FORBIDDEN';
       throw error;

@@ -1,8 +1,10 @@
 const approverService = require('../services/approverService');
+const { isAdminRole } = require('../helpers/roleAuthorization');
 
 function requireSystemAdmin(req) {
-  if (req.user?.profile?.ROLE === 'System Admin') return;
-  const error = new Error('Only the System Admin role can manage approvers.');
+  const profile = req.user?.profile;
+  if (isAdminRole(profile?.ROLE, profile?.ROLE_ID)) return;
+  const error = new Error('Only the System Admin or Super Admin role can manage approvers.');
   error.statusCode = 403;
   error.code = 'FORBIDDEN';
   throw error;

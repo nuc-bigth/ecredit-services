@@ -1,18 +1,21 @@
 const logger = require('../../config/logger');
 const userService = require('../../services/userService');
 const permissionService = require('../../services/permissionService');
+const { isAdminRole } = require('../../helpers/roleAuthorization');
 
 function requireSystemAdmin(req) {
-  if (req.user?.profile?.ROLE === 'System Admin') return;
-  const error = new Error('Only the System Admin role can manage users.');
+  const profile = req.user?.profile;
+  if (isAdminRole(profile?.ROLE, profile?.ROLE_ID)) return;
+  const error = new Error('Only the System Admin or Super Admin role can manage users.');
   error.statusCode = 403;
   error.code = 'FORBIDDEN';
   throw error;
 }
 
 function requireLoggedInSystemAdmin(req) {
-  if (req.user?.profile?.LOGGED_IN_ROLE === 'System Admin') return;
-  const error = new Error('Only the System Admin role can manage users.');
+  const profile = req.user?.profile;
+  if (isAdminRole(profile?.LOGGED_IN_ROLE, profile?.LOGGED_IN_ROLE_ID)) return;
+  const error = new Error('Only the System Admin or Super Admin role can manage users.');
   error.statusCode = 403;
   error.code = 'FORBIDDEN';
   throw error;
